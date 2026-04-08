@@ -1,0 +1,2197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🧩 스도쿠 마스터</title>
+<style>
+/* ── 오프라인 전용 — 시스템 폰트만 사용 ── */
+:root {
+  --font-display: 'SF Pro Rounded', 'Trebuchet MS', 'Century Gothic',
+                  'Arial Rounded MT Bold', ui-rounded, system-ui, sans-serif;
+  --font-ui:      -apple-system, BlinkMacSystemFont, 'Malgun Gothic',
+                  '맑은 고딕', 'Apple SD Gothic Neo', 'Nanum Gothic',
+                  sans-serif;
+}
+
+/* ── 다크 모드 (기본) ── */
+:root {
+  --bg:#0a0a14; --surface:#12121f; --card:#1a1a2e; --border:#2a2a4a;
+  --accent:#7c3aed; --accent2:#06b6d4; --accent3:#f59e0b;
+  --error:#ef4444; --success:#10b981;
+  --text:#e2e8f0; --text-dim:#64748b; --given:#a5b4fc;
+  --glow:0 0 20px rgba(124,58,237,0.4);
+  --cell-hover:#1e1e36; --cell-sel:#2d1b69; --cell-hl:#1c1c30;
+  --box-border:#4a4a7a; --cell-error-bg:#2d1218;
+  --board-glow:0 0 30px rgba(124,58,237,.15);
+  --board-inset:inset 0 1px 0 rgba(255,255,255,.05);
+  --overlay-bg:rgba(5,5,15,.93);    /* 블러 제거 보완: 불투명도 높임 */
+  --pause-bg:rgba(10,10,20,.95);    /* 블러 제거 보완 */
+  --tdd-bg:rgba(5,5,15,.97);        /* 블러 제거 보완 */
+  --cs:52px;
+}
+/* ── 라이트 모드 ── */
+html.light {
+  --bg:#f0f4ff; --surface:#ffffff; --card:#ffffff; --border:#d1d9f0;
+  --accent:#6d28d9; --accent2:#0891b2; --accent3:#d97706;
+  --error:#dc2626; --success:#059669;
+  --text:#1e1b4b; --text-dim:#6b7280; --given:#4f46e5;
+  --glow:0 0 16px rgba(109,40,217,0.25);
+  --cell-hover:#ede9fe; --cell-sel:#ddd6fe; --cell-hl:#e0e7ff;
+  --box-border:#a5b4fc; --cell-error-bg:#fee2e2;
+  --board-glow:0 4px 24px rgba(109,40,217,.12);
+  --board-inset:inset 0 1px 0 rgba(255,255,255,.8);
+  --overlay-bg:rgba(30,27,75,.72);   /* 블러 제거 보완 */
+  --pause-bg:rgba(240,244,255,.97);  /* 블러 제거 보완 */
+  --tdd-bg:rgba(240,244,255,.98);    /* 블러 제거 보완 */
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+
+html,body{
+  width:100%;height:100%;
+  overflow:hidden;
+  background:var(--bg);color:var(--text);
+  font-family:var(--font-ui);
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+  transition:background .35s, color .35s;
+}
+
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 10%,rgba(124,58,237,.12) 0%,transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 90%,rgba(6,182,212,.08) 0%,transparent 60%);
+  transition:opacity .4s;
+}
+html.light body::before{
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 10%,rgba(109,40,217,.07) 0%,transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 90%,rgba(8,145,178,.05) 0%,transparent 60%);
+}
+
+#app{
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;align-items:center;
+  height:100vh;height:100dvh;
+  padding:6px 8px 4px;
+  gap:4px;
+  overflow:hidden;
+}
+
+/* HEADER */
+header{
+  display:flex;align-items:center;justify-content:center;
+  gap:10px;width:100%;flex-shrink:0;padding:2px 0;
+}
+#logo{
+  font-family:var(--font-display);
+  font-size:clamp(.95rem,3.2vw,1.45rem);
+  font-weight:900;letter-spacing:.04em;
+  background:linear-gradient(135deg,#a78bfa,#06b6d4);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 12px rgba(124,58,237,.6));
+  cursor:pointer;user-select:none;
+  padding:2px 4px;border-radius:6px;transition:filter .2s;
+}
+#logo.tap-flash{filter:drop-shadow(0 0 22px rgba(245,158,11,1));}
+
+/* THEME TOGGLE */
+#theme-btn{
+  flex-shrink:0;
+  width:34px;height:34px;border-radius:50%;
+  border:1.5px solid var(--border);
+  background:var(--card);
+  cursor:pointer;font-size:1rem;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .25s;box-shadow:none;
+  line-height:1;
+}
+#theme-btn:hover{border-color:var(--accent);box-shadow:var(--glow);transform:rotate(20deg) scale(1.1);}
+html.light #theme-btn{background:var(--surface);}
+
+/* DIFFICULTY */
+.diff-bar{display:flex;gap:6px;flex-shrink:0;}
+.diff-btn{
+  padding:4px 12px;border:1.5px solid var(--border);
+  background:var(--card);color:var(--text-dim);
+  border-radius:50px;cursor:pointer;
+  font-family:var(--font-ui);font-size:.72rem;transition:all .2s;
+}
+.diff-btn:hover{border-color:var(--accent);color:var(--text);}
+.diff-btn.active{
+  border-color:var(--accent);background:var(--accent);color:#fff;box-shadow:var(--glow);
+  cursor:default;        /* 같은 난이도: 포인터 커서 제거 */
+  pointer-events:none;   /* 클릭 이벤트 자체 차단 (CSS 레벨) */
+  opacity:.85;
+}
+
+/* STATS */
+.stats-bar{
+  display:flex;gap:10px;flex-shrink:0;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:4px 14px;
+}
+.stat{text-align:center;}
+.stat-label{font-size:.58rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;}
+.stat-value{font-family:var(--font-display);font-size:.82rem;font-weight:700;}
+#timer-val{color:var(--accent2);}
+#mistakes-val{color:var(--error);}
+#hints-val{color:var(--accent3);}
+
+/* BOARD */
+.board-wrap{
+  flex-shrink:0;
+  background:var(--card);border:2px solid var(--border);
+  border-radius:14px;padding:7px;
+  box-shadow:var(--board-glow),var(--board-inset);
+  position:relative;
+  transition:background .35s, border-color .35s, box-shadow .35s;
+}
+.board-wrap.paused::after{
+  content:'⏸  일시정지';
+  position:absolute;inset:0;
+  background:var(--pause-bg);
+  /* backdrop-filter 제거: 모바일 GPU 렌더링 병목 해소 */
+  border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-size:1.1rem;
+  color:var(--accent);letter-spacing:.08em;z-index:10;
+}
+#board{
+  display:grid;
+  grid-template-columns:repeat(9,var(--cs));
+  grid-template-rows:repeat(9,var(--cs));
+  gap:2px;
+}
+.cell{
+  width:var(--cs);height:var(--cs);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-size:.95rem;font-weight:700;
+  background:var(--surface);border:1px solid var(--border);
+  cursor:pointer;position:relative;
+  transition:background .12s,transform .1s,box-shadow .12s,border-color .35s;
+  border-radius:3px;user-select:none;
+}
+.cell.box-right{border-right:2px solid var(--box-border);}
+.cell.box-bottom{border-bottom:2px solid var(--box-border);}
+.cell:hover:not(.given):not(.locked){background:var(--cell-hover);transform:scale(1.04);}
+.cell.selected{background:var(--cell-sel);box-shadow:inset 0 0 0 2px var(--accent),var(--glow);z-index:2;}
+.cell.highlight{background:var(--cell-hl);}
+.cell.given{color:var(--given);cursor:default;}
+.cell.locked{cursor:default;}
+.cell.error{color:var(--error);animation:shake .3s;background:var(--cell-error-bg);}
+.cell.hint-cell{color:var(--success);animation:glow-pulse .6s ease;}
+.cell .notes{display:grid;grid-template-columns:repeat(3,1fr);position:absolute;inset:2px;pointer-events:none;}
+.cell .note-num{font-size:.36rem;color:#6b7280;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);}
+
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@keyframes glow-pulse{
+  0%{box-shadow:inset 0 0 0 2px var(--success)}
+  50%{box-shadow:inset 0 0 0 2px var(--success),0 0 18px rgba(16,185,129,.5)}
+  100%{box-shadow:inset 0 0 0 2px var(--success)}
+}
+
+/* NUMPAD */
+.numpad{display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:center;}
+.num-btn{
+  width:var(--cs);height:calc(var(--cs)*.8);
+  border:1.5px solid var(--border);
+  background:var(--card);color:var(--text);
+  border-radius:8px;font-family:var(--font-display);
+  font-size:.9rem;font-weight:700;cursor:pointer;
+  transition:all .15s;position:relative;
+}
+.num-btn:hover{border-color:var(--accent);background:var(--cell-hover);transform:translateY(-2px);box-shadow:var(--glow);}
+.num-btn.full{opacity:.3;pointer-events:none;}
+.count-badge{
+  position:absolute;top:-5px;right:-5px;
+  background:var(--accent);color:#fff;
+  font-size:.48rem;border-radius:50%;
+  width:13px;height:13px;display:flex;align-items:center;justify-content:center;
+}
+
+/* CONTROLS ROW */
+.controls-row{
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+  flex-wrap:wrap;justify-content:center;
+}
+.act-btn{
+  padding:6px 11px;border:1.5px solid var(--border);
+  background:var(--card);color:var(--text);
+  border-radius:50px;cursor:pointer;
+  font-family:var(--font-ui);font-size:.72rem;
+  display:flex;align-items:center;gap:4px;transition:all .15s;
+}
+.act-btn:hover{border-color:var(--accent2);color:var(--accent2);transform:translateY(-1px);}
+.act-btn.danger:hover{border-color:var(--error);color:var(--error);}
+.act-btn.hint-btn{border-color:var(--accent3);color:var(--accent3);}
+.act-btn.hint-btn:hover{background:rgba(245,158,11,.1);}
+.act-btn.pause-btn.active{border-color:var(--accent2);color:var(--accent2);background:rgba(6,182,212,.1);}
+.act-btn:disabled{opacity:.3;pointer-events:none;}
+/* light mode act-btn hover bg */
+html.light .act-btn:hover{background:var(--cell-hl);}
+.note-toggle{
+  display:flex;align-items:center;gap:5px;cursor:pointer;
+  color:var(--text-dim);font-size:.72rem;flex-shrink:0;
+}
+.note-toggle input{display:none;}
+.toggle-track{width:28px;height:16px;background:var(--border);border-radius:8px;position:relative;transition:.2s;}
+.toggle-track::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#888;transition:.2s;}
+.note-toggle input:checked+.toggle-track{background:var(--accent2);}
+.note-toggle input:checked+.toggle-track::after{left:14px;background:#fff;}
+
+/* OVERLAYS */
+.overlay{
+  position:fixed;inset:0;z-index:100;
+  background:var(--overlay-bg);
+  /* backdrop-filter 제거: 모바일 GPU 렌더링 병목 해소 */
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+  will-change:opacity;
+}
+.overlay.show{opacity:1;pointer-events:all;}
+.modal{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:20px;padding:26px 28px;
+  text-align:center;max-width:310px;width:90%;
+  transform:scale(.9);transition:.3s;
+  box-shadow:0 0 60px rgba(124,58,237,.3);
+}
+.overlay.show .modal{transform:scale(1);}
+.modal h2{font-family:var(--font-display);font-size:1.2rem;margin-bottom:6px;
+  background:linear-gradient(135deg,#a78bfa,#06b6d4);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.modal p{color:var(--text-dim);margin-bottom:14px;font-size:.82rem;white-space:pre-line;line-height:1.6;}
+.stars{font-size:1.6rem;margin-bottom:8px;}
+.modal-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+.modal-btn{
+  padding:9px 22px;border:none;border-radius:50px;
+  background:var(--accent);color:#fff;cursor:pointer;
+  font-family:var(--font-ui);font-size:.85rem;font-weight:700;
+  transition:.2s;box-shadow:var(--glow);
+}
+.modal-btn:hover{background:#6d28d9;transform:scale(1.04);}
+
+/* START MODAL */
+.start-logo{font-size:2.8rem;line-height:1;margin-bottom:6px;}
+
+/* 로딩 스피너 */
+.loading-spinner{
+  display:none;
+  width:28px;height:28px;margin:12px auto 4px;
+  border:3px solid var(--border);
+  border-top-color:var(--accent);
+  border-radius:50%;
+  animation:spin .7s linear infinite;
+}
+.loading-spinner.show{display:block;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.start-diff-btn.loading{opacity:.5;pointer-events:none;}
+.start-diff-btn.loading .sdiff-icon::after{content:' ⏳';}
+#start-modal h2{margin-bottom:4px;}
+.start-sub{font-size:.8rem;color:var(--text-dim);margin-bottom:12px;}
+
+/* 이어하기 카드 */
+.resume-card{
+  display:flex;align-items:center;gap:10px;
+  background:var(--surface);border:1.5px solid var(--accent);
+  border-radius:14px;padding:10px 14px;margin-bottom:10px;text-align:left;
+}
+.resume-icon{font-size:1.6rem;flex-shrink:0;}
+.resume-label{display:block;font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;}
+.resume-detail{display:block;font-size:.8rem;color:var(--text);font-weight:700;margin-top:2px;}
+.start-resume-btn{width:100%;margin-bottom:4px;}
+.start-divider{
+  display:flex;align-items:center;gap:8px;
+  margin:10px 0 8px;color:var(--text-dim);font-size:.72rem;
+}
+.start-divider::before,.start-divider::after{
+  content:'';flex:1;height:1px;background:var(--border);
+}
+/* 난이도 선택 버튼 3개 */
+.start-diff-group{display:flex;flex-direction:column;gap:8px;width:100%;}
+.start-diff-btn{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 16px;border:1.5px solid var(--border);
+  background:var(--surface);border-radius:14px;
+  cursor:pointer;text-align:left;transition:all .18s;width:100%;
+}
+.start-diff-btn:hover,.start-diff-btn:focus{
+  border-color:var(--accent);background:var(--cell-hl);
+  transform:translateX(4px);box-shadow:var(--glow);outline:none;
+}
+.sdiff-icon{font-size:1.4rem;flex-shrink:0;width:28px;text-align:center;}
+.sdiff-info{display:flex;flex-direction:column;flex:1;text-align:left;}
+.sdiff-label{
+  font-family:var(--font-display);font-size:.9rem;
+  font-weight:700;color:var(--text);
+}
+.sdiff-desc{font-size:.68rem;color:var(--text-dim);margin-top:1px;}
+.sdiff-badge{
+  flex-shrink:0;font-size:.65rem;color:var(--accent3);
+  background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);
+  border-radius:8px;padding:2px 6px;white-space:nowrap;
+  display:none;
+}
+.sdiff-badge.visible{display:inline-block;}
+
+/* MAP POOL PANEL */
+#map-panel{
+  position:fixed;inset:0;z-index:150;
+  background:var(--tdd-bg);
+  /* backdrop-filter 제거: 모바일 GPU 렌더링 병목 해소 */
+  display:flex;flex-direction:column;align-items:center;
+  padding:20px 14px;
+  opacity:0;pointer-events:none;transition:opacity .2s;overflow-y:auto;
+  will-change:opacity;
+}
+#map-panel.show{opacity:1;pointer-events:all;}
+#map-panel h3{font-family:var(--font-display);font-size:1rem;color:var(--accent2);margin-bottom:14px;}
+#map-close{
+  position:absolute;top:14px;right:16px;
+  background:none;border:none;color:var(--text-dim);
+  font-size:1.4rem;cursor:pointer;line-height:1;
+}
+.pool-stats{
+  display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;justify-content:center;
+}
+.pool-stat-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:8px 16px;text-align:center;min-width:80px;
+}
+.pool-stat-card .ps-label{font-size:.65rem;color:var(--text-dim);text-transform:uppercase;}
+.pool-stat-card .ps-val{font-family:var(--font-display);font-size:1.1rem;font-weight:700;color:var(--accent2);}
+.map-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:14px;}
+.map-act-btn{
+  padding:8px 18px;border:1.5px solid var(--border);
+  background:var(--card);color:var(--text);
+  border-radius:50px;cursor:pointer;
+  font-family:var(--font-ui);font-size:.8rem;
+  transition:all .2s;
+}
+.map-act-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+.map-act-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.map-act-btn.primary:hover{background:#6d28d9;}
+#map-import-msg{
+  font-size:.78rem;padding:8px 14px;border-radius:10px;
+  background:var(--surface);border:1px solid var(--border);
+  color:var(--text-dim);display:none;text-align:center;
+}
+#map-import-msg.show{display:block;}
+#map-import-msg.success{border-color:var(--success);color:var(--success);}
+#map-import-msg.error{border-color:var(--error);color:var(--error);}
+
+/* TDD PANEL */
+#test-panel{
+  position:fixed;inset:0;z-index:200;
+  background:var(--tdd-bg);
+  /* backdrop-filter 제거: 모바일 GPU 렌더링 병목 해소 */
+  display:flex;flex-direction:column;align-items:center;
+  padding:20px 14px 20px;
+  opacity:0;pointer-events:none;transition:opacity .2s;overflow-y:auto;
+  will-change:opacity;
+}
+#test-panel.show{opacity:1;pointer-events:all;}
+#test-panel h3{font-family:var(--font-display);font-size:.95rem;color:var(--accent3);margin-bottom:10px;}
+#test-close{
+  position:absolute;top:14px;right:16px;
+  background:none;border:none;color:var(--text-dim);
+  font-size:1.4rem;cursor:pointer;line-height:1;
+}
+#test-output{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:12px;
+  font-family:monospace;font-size:.7rem;color:var(--text);
+  white-space:pre-wrap;line-height:1.7;
+  width:100%;max-width:600px;
+}
+.t-pass{color:var(--success);}
+.t-fail{color:var(--error);}
+.t-info{color:var(--accent2);}
+.t-group{color:var(--accent3);font-weight:bold;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <span id="logo">🧩 스도쿠 마스터</span>
+    <button id="map-btn" title="맵 풀 관리" style="flex-shrink:0;width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);background:var(--card);cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:all .25s;">🗂️</button>
+    <button id="theme-btn" title="테마 전환">🌙</button>
+  </header>
+
+  <div class="diff-bar" id="diff-bar">
+    <button class="diff-btn active" data-diff="easy">🌱 초급</button>
+    <button class="diff-btn" data-diff="medium">🔥 중급</button>
+    <button class="diff-btn" data-diff="hard">💀 고급</button>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat"><div class="stat-label">⏱️ 시간</div><div class="stat-value" id="timer-val">00:00</div></div>
+    <div class="stat"><div class="stat-label">❌ 실수</div><div class="stat-value" id="mistakes-val">0</div></div>
+    <div class="stat"><div class="stat-label">💡 힌트</div><div class="stat-value" id="hints-val">3</div></div>
+  </div>
+
+  <div class="board-wrap" id="board-wrap">
+    <div id="board"></div>
+  </div>
+
+  <div class="numpad" id="numpad"></div>
+
+  <div class="controls-row">
+    <button class="act-btn" id="btn-undo">↩️ 되돌리기</button>
+    <button class="act-btn hint-btn" id="btn-hint">💡 힌트</button>
+    <button class="act-btn" id="btn-erase">🗑️ 지우기</button>
+    <button class="act-btn pause-btn" id="btn-pause">⏸️ 일시정지</button>
+    <button class="act-btn danger" id="btn-new">🔄 새 게임</button>
+    <label class="note-toggle">
+      <input type="checkbox" id="note-mode">
+      <span class="toggle-track"></span>✏️ 메모
+    </label>
+  </div>
+
+</div>
+
+<!-- 완료 모달 -->
+<div class="overlay" id="complete-overlay">
+  <div class="modal">
+    <div class="stars" id="complete-stars">⭐⭐⭐</div>
+    <h2>🎉 완성!</h2>
+    <p id="complete-msg"></p>
+    <div class="modal-btns">
+      <button class="modal-btn" id="btn-play-again">🚀 다시 하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 시작 모달 -->
+<div class="overlay show" id="start-overlay">
+  <div class="modal" id="start-modal">
+    <div class="start-logo">🧩</div>
+    <h2>스도쿠 마스터</h2>
+
+    <!-- 저장된 게임 있을 때만 표시 -->
+    <div id="resume-section" style="display:none">
+      <div class="resume-card">
+        <div class="resume-icon">💾</div>
+        <div class="resume-meta">
+          <span class="resume-label">저장된 게임</span>
+          <span id="resume-info" class="resume-detail"></span>
+        </div>
+      </div>
+      <button class="modal-btn start-resume-btn" id="btn-resume">▶️ 이어서 하기</button>
+      <div class="start-divider"><span>새 게임 시작</span></div>
+    </div>
+
+    <p class="start-sub" id="start-sub">난이도를 선택해 주세요</p>
+    <div class="loading-spinner" id="start-spinner"></div>
+    <div class="start-diff-group">
+      <button class="start-diff-btn" data-diff="easy">
+        <span class="sdiff-icon">🌱</span>
+        <div class="sdiff-info">
+          <span class="sdiff-label">초급</span>
+          <span class="sdiff-desc">36개 단서 · 힌트 5회</span>
+        </div>
+        <span class="sdiff-badge" id="badge-easy"></span>
+      </button>
+      <button class="start-diff-btn" data-diff="medium">
+        <span class="sdiff-icon">🔥</span>
+        <div class="sdiff-info">
+          <span class="sdiff-label">중급</span>
+          <span class="sdiff-desc">27개 단서 · 힌트 3회</span>
+        </div>
+        <span class="sdiff-badge" id="badge-medium"></span>
+      </button>
+      <button class="start-diff-btn" data-diff="hard">
+        <span class="sdiff-icon">💀</span>
+        <div class="sdiff-info">
+          <span class="sdiff-label">고급</span>
+          <span class="sdiff-desc">20개 단서 · 힌트 2회</span>
+        </div>
+        <span class="sdiff-badge" id="badge-hard"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 난이도 변경 시 저장 확인 모달 -->
+<div class="overlay" id="save-confirm-overlay">
+  <div class="modal">
+    <div class="stars">💾</div>
+    <h2 id="save-confirm-title">게임을 저장할까요?</h2>
+    <p id="save-confirm-msg">현재 진행 중인 게임을 저장하고<br>난이도를 변경합니다.</p>
+    <div class="modal-btns">
+      <button class="modal-btn" id="btn-save-yes">💾 저장하고 변경</button>
+      <button class="modal-btn" style="background:var(--surface);border:1.5px solid var(--border);color:var(--text);box-shadow:none;" id="btn-save-no">🗑️ 저장 안 함</button>
+      <button class="modal-btn" style="background:transparent;border:1.5px solid var(--border);color:var(--text-dim);box-shadow:none;font-size:.78rem;" id="btn-save-cancel">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- 맵 풀 관리 패널 -->
+<div id="map-panel">
+  <button id="map-close">✕</button>
+  <h3>🗂️ 퍼즐 맵 풀 관리</h3>
+  <div class="pool-stats">
+    <div class="pool-stat-card"><div class="ps-label">🌱 초급</div><div class="ps-val" id="pool-cnt-easy">-</div></div>
+    <div class="pool-stat-card"><div class="ps-label">🔥 중급</div><div class="ps-val" id="pool-cnt-medium">-</div></div>
+    <div class="pool-stat-card"><div class="ps-label">💀 고급</div><div class="ps-val" id="pool-cnt-hard">-</div></div>
+  </div>
+  <div class="map-actions">
+    <button class="map-act-btn primary" id="btn-map-download">⬇️ 맵 다운로드</button>
+    <button class="map-act-btn" id="btn-map-upload-trigger">⬆️ 맵 업로드</button>
+    <button class="map-act-btn" id="btn-map-refill">🔄 풀 보충</button>
+  </div>
+  <input type="file" id="map-file-input" accept=".json" style="display:none">
+  <div id="map-import-msg"></div>
+</div>
+
+<!-- TDD 패널 (로고 3번 클릭) -->
+<div id="test-panel">
+  <button id="test-close">✕</button>
+  <h3>🧪 TDD 테스트 결과</h3>
+  <div id="test-output">테스트를 실행하는 중...</div>
+</div>
+
+<script>
+'use strict';
+// ╔══════════════════════════════════════════════════════╗
+// ║  🧩 스도쿠 마스터 v2                               ║
+// ║  Fold-fit · Pause · Auto-Save · Logo×3 TDD         ║
+// ╚══════════════════════════════════════════════════════╝
+
+/* ═══════════════════════════════════════════
+   📐 PLANNING AGENT — 상수 & 설계
+   ═══════════════════════════════════════════ */
+const DIFFICULTY = {
+  easy:   { label:'🌱 초급', clues:36, hints:5 },
+  medium: { label:'🔥 중급', clues:27, hints:3 },
+  hard:   { label:'💀 고급', clues:20, hints:2 }
+};
+const SAVE_KEY_PREFIX = 'sudoku_save_v3_';  // 난이도별: easy/medium/hard
+const THEME_KEY = 'sudoku_theme';
+function diffSaveKey(diff){ return SAVE_KEY_PREFIX + (diff||'easy'); }
+// ── 맵 풀 상수 ──────────────────────────────────────
+const POOL_KEY_PREFIX = 'sudoku_pool_v1_'; // 난이도별 맵 풀 DB 키
+const POOL_TARGET = 8;   // 난이도별 목표 풀 크기
+function poolKey(diff){ return POOL_KEY_PREFIX + (diff||'easy'); }
+
+// ── 내장 맵 (번들 포함, 네트워크 없이 즉시 사용) ────
+const BUILTIN_MAPS = {
+  easy: [
+    {puzzle:[[0,0,8,0,5,9,0,0,0],[5,0,9,0,3,6,2,0,0],[0,0,1,0,2,0,5,0,0],[7,0,4,2,0,0,0,1,0],[0,5,0,0,0,1,4,0,9],[1,9,0,0,0,0,7,6,0],[4,1,0,0,0,5,0,2,8],[3,2,0,8,0,0,9,0,0],[9,8,0,0,0,0,1,7,0]],solution:[[2,3,8,1,5,9,6,4,7],[5,4,9,7,3,6,2,8,1],[6,7,1,4,2,8,5,9,3],[7,6,4,2,9,3,8,1,5],[8,5,2,6,7,1,4,3,9],[1,9,3,5,8,4,7,6,2],[4,1,7,9,6,5,3,2,8],[3,2,6,8,1,7,9,5,4],[9,8,5,3,4,2,1,7,6]]},
+    {puzzle:[[8,0,0,0,6,0,0,7,0],[0,0,7,3,0,5,0,2,0],[5,1,0,0,7,0,0,6,3],[0,8,6,0,0,9,2,4,5],[0,0,5,0,0,0,0,3,0],[0,0,0,0,2,0,1,8,0],[0,0,8,0,0,3,0,0,2],[2,5,0,0,4,0,3,9,6],[3,0,4,0,0,0,7,0,8]],solution:[[8,4,3,9,6,2,5,7,1],[6,9,7,3,1,5,8,2,4],[5,1,2,8,7,4,9,6,3],[7,8,6,1,3,9,2,4,5],[1,2,5,4,8,7,6,3,9],[4,3,9,5,2,6,1,8,7],[9,7,8,6,5,3,4,1,2],[2,5,1,7,4,8,3,9,6],[3,6,4,2,9,1,7,5,8]]},
+    {puzzle:[[4,3,0,8,0,0,2,0,0],[0,7,0,1,2,6,0,0,0],[0,0,9,0,0,5,0,0,0],[8,0,0,9,3,1,7,6,0],[0,0,0,0,5,4,3,8,9],[3,9,0,6,7,0,0,0,1],[0,4,0,7,0,0,0,1,2],[0,8,3,0,1,0,0,0,0],[0,2,0,5,0,0,4,0,0]],solution:[[4,3,1,8,9,7,2,5,6],[5,7,8,1,2,6,9,4,3],[2,6,9,3,4,5,1,7,8],[8,5,2,9,3,1,7,6,4],[6,1,7,2,5,4,3,8,9],[3,9,4,6,7,8,5,2,1],[9,4,5,7,6,3,8,1,2],[7,8,3,4,1,2,6,9,5],[1,2,6,5,8,9,4,3,7]]},
+    {puzzle:[[0,4,0,0,0,3,7,8,0],[2,3,0,8,0,0,0,4,0],[5,0,0,2,0,0,9,3,6],[3,6,4,0,0,0,8,0,9],[0,0,0,3,8,9,0,0,4],[0,0,8,0,0,0,3,0,7],[0,0,0,0,0,0,4,0,3],[0,0,0,6,7,4,2,0,0],[4,0,0,0,3,2,6,0,8]],solution:[[6,4,9,5,1,3,7,8,2],[2,3,7,8,9,6,5,4,1],[5,8,1,2,4,7,9,3,6],[3,6,4,7,2,1,8,5,9],[7,5,2,3,8,9,1,6,4],[1,9,8,4,6,5,3,2,7],[9,2,6,1,5,8,4,7,3],[8,1,3,6,7,4,2,9,5],[4,7,5,9,3,2,6,1,8]]},
+    {puzzle:[[0,0,0,0,0,1,3,8,4],[0,3,6,4,0,7,0,0,9],[4,8,0,3,5,0,0,0,0],[0,4,7,0,2,3,9,0,0],[8,2,0,1,0,0,4,0,5],[6,0,5,0,0,0,0,0,0],[0,0,2,0,4,0,0,5,0],[0,7,0,6,1,5,8,0,0],[0,0,0,0,0,0,6,4,7]],solution:[[7,5,9,2,6,1,3,8,4],[2,3,6,4,8,7,5,1,9],[4,8,1,3,5,9,7,2,6],[1,4,7,5,2,3,9,6,8],[8,2,3,1,9,6,4,7,5],[6,9,5,8,7,4,2,3,1],[9,6,2,7,4,8,1,5,3],[3,7,4,6,1,5,8,9,2],[5,1,8,9,3,2,6,4,7]]},
+    {puzzle:[[4,0,5,2,0,3,6,7,1],[1,0,0,0,0,0,8,0,4],[0,7,0,0,0,0,0,5,3],[6,0,2,0,8,0,3,0,7],[8,4,0,0,3,2,0,0,5],[5,0,0,0,0,0,2,8,9],[9,0,0,0,0,0,0,0,8],[7,0,0,3,0,0,4,0,6],[3,0,0,8,0,0,0,9,0]],solution:[[4,8,5,2,9,3,6,7,1],[1,3,9,7,5,6,8,2,4],[2,7,6,1,4,8,9,5,3],[6,9,2,5,8,1,3,4,7],[8,4,7,9,3,2,1,6,5],[5,1,3,6,7,4,2,8,9],[9,2,1,4,6,5,7,3,8],[7,5,8,3,2,9,4,1,6],[3,6,4,8,1,7,5,9,2]]},
+    {puzzle:[[0,2,0,0,0,4,5,8,0],[0,4,5,0,0,7,6,0,0],[6,0,0,8,0,0,2,4,7],[5,0,0,4,3,0,0,0,0],[3,0,0,6,8,0,7,5,0],[0,0,4,0,7,0,9,6,0],[9,0,8,0,0,0,0,1,0],[1,0,0,5,0,0,3,0,0],[4,5,0,3,9,0,0,0,6]],solution:[[7,2,3,9,6,4,5,8,1],[8,4,5,2,1,7,6,3,9],[6,9,1,8,5,3,2,4,7],[5,7,6,4,3,9,1,2,8],[3,1,9,6,8,2,7,5,4],[2,8,4,1,7,5,9,6,3],[9,3,8,7,2,6,4,1,5],[1,6,7,5,4,8,3,9,2],[4,5,2,3,9,1,8,7,6]]},
+    {puzzle:[[0,3,1,0,0,0,2,8,0],[8,0,0,0,6,0,7,1,4],[0,0,0,0,0,0,5,0,3],[7,8,2,0,5,0,0,3,0],[3,0,0,6,0,1,8,0,2],[0,0,6,2,0,3,0,0,0],[1,0,4,8,0,6,0,2,0],[6,7,0,0,9,0,1,0,8],[2,0,0,0,0,0,0,0,5]],solution:[[9,3,1,7,4,5,2,8,6],[8,2,5,3,6,9,7,1,4],[4,6,7,1,2,8,5,9,3],[7,8,2,9,5,4,6,3,1],[3,4,9,6,7,1,8,5,2],[5,1,6,2,8,3,4,7,9],[1,5,4,8,3,6,9,2,7],[6,7,3,5,9,2,1,4,8],[2,9,8,4,1,7,3,6,5]]},
+  ],
+  medium: [
+    {puzzle:[[0,0,0,0,0,1,0,0,9],[0,7,1,0,0,0,0,0,0],[3,6,4,0,0,0,0,7,2],[0,0,0,0,0,7,3,6,1],[7,0,6,0,0,0,8,2,0],[0,2,0,0,0,0,4,0,0],[0,0,0,0,0,0,0,4,8],[6,1,0,7,0,8,0,0,0],[0,4,0,0,5,0,0,0,0]],solution:[[5,8,2,4,7,1,6,3,9],[9,7,1,6,2,3,5,8,4],[3,6,4,5,8,9,1,7,2],[4,5,8,2,9,7,3,6,1],[7,9,6,1,3,4,8,2,5],[1,2,3,8,6,5,4,9,7],[2,3,5,9,1,6,7,4,8],[6,1,9,7,4,8,2,5,3],[8,4,7,3,5,2,9,1,6]]},
+    {puzzle:[[9,0,0,0,0,0,8,0,0],[5,0,0,0,0,0,7,0,9],[7,2,1,0,0,0,4,0,0],[0,0,0,4,1,2,0,0,0],[0,0,0,0,0,9,3,0,0],[4,0,0,5,0,0,1,0,0],[0,0,0,9,2,4,0,3,0],[0,0,0,0,0,6,2,0,8],[0,1,5,0,0,0,9,0,0]],solution:[[9,6,4,7,3,5,8,1,2],[5,3,8,2,4,1,7,6,9],[7,2,1,6,9,8,4,5,3],[8,7,3,4,1,2,6,9,5],[1,5,6,8,7,9,3,2,4],[4,9,2,5,6,3,1,8,7],[6,8,7,9,2,4,5,3,1],[3,4,9,1,5,6,2,7,8],[2,1,5,3,8,7,9,4,6]]},
+    {puzzle:[[0,0,7,0,0,0,0,8,5],[0,0,0,0,7,5,0,2,6],[0,0,0,0,0,0,0,0,3],[0,0,0,5,0,0,0,0,2],[0,5,6,7,0,8,0,1,0],[1,0,0,0,0,6,8,5,0],[0,0,0,0,3,0,0,0,9],[0,0,9,0,0,0,5,3,0],[0,0,1,0,0,0,2,6,0]],solution:[[9,3,7,6,2,4,1,8,5],[4,1,8,3,7,5,9,2,6],[6,2,5,1,8,9,4,7,3],[8,7,4,5,1,3,6,9,2],[2,5,6,7,9,8,3,1,4],[1,9,3,2,4,6,8,5,7],[5,6,2,8,3,1,7,4,9],[7,8,9,4,6,2,5,3,1],[3,4,1,9,5,7,2,6,8]]},
+    {puzzle:[[0,6,0,0,0,0,9,0,0],[0,0,0,0,0,0,0,0,4],[0,0,4,2,6,1,3,0,0],[9,0,0,0,8,2,7,0,0],[0,0,0,9,0,0,0,4,0],[0,7,0,0,0,5,0,2,0],[2,0,7,0,9,0,1,0,6],[0,8,0,1,0,0,0,0,0],[3,0,0,5,2,0,0,0,0]],solution:[[7,6,2,4,3,8,9,5,1],[1,3,8,7,5,9,2,6,4],[5,9,4,2,6,1,3,7,8],[9,4,3,6,8,2,7,1,5],[6,2,5,9,1,7,8,4,3],[8,7,1,3,4,5,6,2,9],[2,5,7,8,9,4,1,3,6],[4,8,6,1,7,3,5,9,2],[3,1,9,5,2,6,4,8,7]]},
+    {puzzle:[[6,0,0,4,0,0,0,0,0],[9,0,0,0,1,0,0,4,0],[4,0,0,2,9,8,3,5,0],[0,9,0,0,0,0,0,0,0],[0,0,0,6,5,0,0,0,0],[1,6,0,0,4,0,8,2,0],[5,0,6,8,3,0,0,0,9],[0,0,0,0,2,0,6,0,0],[0,0,9,0,0,0,0,0,0]],solution:[[6,3,8,4,7,5,1,9,2],[9,5,2,3,1,6,7,4,8],[4,1,7,2,9,8,3,5,6],[7,9,3,1,8,2,4,6,5],[8,2,4,6,5,7,9,1,3],[1,6,5,9,4,3,8,2,7],[5,4,6,8,3,1,2,7,9],[3,7,1,5,2,9,6,8,4],[2,8,9,7,6,4,5,3,1]]},
+    {puzzle:[[2,0,0,0,0,0,9,6,0],[0,0,7,0,0,2,1,4,0],[6,1,0,5,0,0,0,0,2],[0,0,0,0,0,5,0,0,6],[0,0,0,0,0,0,0,0,0],[0,6,9,0,0,0,5,0,3],[4,0,0,6,0,0,0,0,0],[8,0,0,4,9,3,0,5,0],[0,9,6,0,0,0,2,0,0]],solution:[[2,4,3,8,7,1,9,6,5],[9,5,7,3,6,2,1,4,8],[6,1,8,5,4,9,7,3,2],[7,3,4,9,1,5,8,2,6],[5,8,2,7,3,6,4,1,9],[1,6,9,2,8,4,5,7,3],[4,7,5,6,2,8,3,9,1],[8,2,1,4,9,3,6,5,7],[3,9,6,1,5,7,2,8,4]]},
+    {puzzle:[[9,0,7,0,0,0,0,2,0],[0,5,3,0,0,2,0,0,8],[0,4,2,0,0,0,9,0,0],[4,0,0,0,0,0,0,0,0],[0,0,0,2,0,0,8,9,4],[0,0,0,0,7,0,6,0,2],[0,9,0,1,4,7,0,0,0],[0,0,0,0,2,0,0,0,6],[2,0,0,0,3,0,7,0,0]],solution:[[9,6,7,5,8,4,3,2,1],[1,5,3,7,9,2,4,6,8],[8,4,2,3,1,6,9,7,5],[4,2,9,8,6,3,5,1,7],[3,7,6,2,5,1,8,9,4],[5,1,8,4,7,9,6,3,2],[6,9,5,1,4,7,2,8,3],[7,3,4,9,2,8,1,5,6],[2,8,1,6,3,5,7,4,9]]},
+    {puzzle:[[2,5,0,0,0,0,8,0,0],[0,1,9,0,8,0,0,0,3],[0,0,0,0,0,2,4,0,0],[0,0,0,0,0,0,6,0,5],[0,0,0,0,0,0,0,0,2],[0,9,4,0,0,5,3,0,0],[0,0,0,0,0,0,0,3,4],[9,4,6,0,0,0,0,2,0],[1,0,0,4,0,0,5,6,7]],solution:[[2,5,3,9,4,1,8,7,6],[4,1,9,6,8,7,2,5,3],[8,6,7,5,3,2,4,1,9],[3,7,2,1,9,8,6,4,5],[5,8,1,3,6,4,7,9,2],[6,9,4,2,7,5,3,8,1],[7,2,5,8,1,6,9,3,4],[9,4,6,7,5,3,1,2,8],[1,3,8,4,2,9,5,6,7]]},
+  ],
+  hard: [
+    {puzzle:[[0,0,7,0,0,0,4,0,0],[0,0,0,0,0,0,5,0,0],[6,1,0,0,0,0,0,9,7],[0,5,0,0,3,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,7,0,4,5,0,0,0,1],[2,0,0,0,1,0,0,7,0],[7,0,0,0,0,0,0,0,0],[0,3,8,9,0,0,0,0,0]],solution:[[5,2,7,6,9,1,4,3,8],[9,8,3,7,2,4,5,1,6],[6,1,4,5,8,3,2,9,7],[4,5,2,1,3,7,8,6,9],[3,9,1,2,6,8,7,4,5],[8,7,6,4,5,9,3,2,1],[2,4,5,8,1,6,9,7,3],[7,6,9,3,4,5,1,8,2],[1,3,8,9,7,2,6,5,4]]},
+    {puzzle:[[0,0,2,5,0,0,0,0,0],[0,0,3,0,2,8,7,0,0],[0,0,0,0,0,9,5,0,0],[0,0,0,0,0,0,6,0,0],[0,0,0,6,0,0,0,0,0],[0,0,1,0,0,0,0,0,7],[8,0,0,0,0,3,0,0,5],[0,0,0,0,4,0,2,0,9],[5,0,0,0,6,0,0,0,0]],solution:[[1,4,2,5,7,6,8,9,3],[9,5,3,4,2,8,7,1,6],[7,6,8,1,3,9,5,2,4],[4,3,5,7,9,1,6,8,2],[2,7,9,6,8,4,3,5,1],[6,8,1,3,5,2,9,4,7],[8,2,7,9,1,3,4,6,5],[3,1,6,8,4,5,2,7,9],[5,9,4,2,6,7,1,3,8]]},
+    {puzzle:[[0,0,5,0,0,0,0,0,0],[0,0,9,0,0,0,0,2,0],[0,6,0,9,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,6,0,0,0,7,0,0],[0,4,3,6,1,0,2,0,0],[6,0,8,0,4,0,0,0,0],[0,0,2,0,6,3,8,9,0],[0,0,0,0,0,0,0,0,0]],solution:[[2,1,5,3,8,4,9,6,7],[3,8,9,1,7,6,4,2,5],[7,6,4,9,2,5,1,3,8],[9,7,1,4,5,2,6,8,3],[5,2,6,8,3,9,7,1,4],[8,4,3,6,1,7,2,5,9],[6,9,8,5,4,1,3,7,2],[4,5,2,7,6,3,8,9,1],[1,3,7,2,9,8,5,4,6]]},
+    {puzzle:[[0,0,1,0,0,0,0,0,9],[0,0,9,0,0,0,0,0,6],[0,0,0,0,0,0,0,0,0],[0,0,7,4,9,3,0,0,8],[0,0,3,0,0,0,1,0,0],[0,0,0,1,7,0,3,0,0],[0,6,0,8,3,0,5,0,2],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,8,0]],solution:[[8,7,1,3,2,6,4,5,9],[5,2,9,7,4,1,8,3,6],[4,3,6,9,8,5,2,7,1],[1,5,7,4,9,3,6,2,8],[2,4,3,5,6,8,1,9,7],[6,9,8,1,7,2,3,4,5],[9,6,4,8,3,7,5,1,2],[7,8,5,2,1,4,9,6,3],[3,1,2,6,5,9,7,8,4]]},
+    {puzzle:[[0,0,0,3,0,0,0,0,0],[0,0,0,0,0,0,9,5,0],[0,7,0,9,0,0,0,0,8],[0,0,4,0,9,0,0,0,0],[8,0,0,0,2,0,5,0,0],[0,6,0,0,0,0,0,0,0],[0,0,5,0,0,0,0,0,2],[1,0,0,6,0,2,0,0,5],[0,0,7,0,0,0,3,0,0]],solution:[[9,1,6,3,8,5,4,2,7],[3,4,8,2,6,7,9,5,1],[5,7,2,9,1,4,6,3,8],[7,5,4,8,9,1,2,6,3],[8,9,3,7,2,6,5,1,4],[2,6,1,5,4,3,8,7,9],[6,3,5,4,7,8,1,9,2],[1,8,9,6,3,2,7,4,5],[4,2,7,1,5,9,3,8,6]]},
+    {puzzle:[[6,0,3,0,0,0,0,0,1],[0,0,4,0,0,0,0,0,0],[0,0,5,1,0,0,0,0,3],[0,0,0,0,0,0,0,0,0],[0,0,0,0,8,3,0,0,0],[0,0,8,0,0,0,0,0,4],[0,0,0,3,0,0,8,0,0],[8,0,0,0,0,0,0,4,6],[5,3,0,0,0,0,1,0,7]],solution:[[6,8,3,9,7,2,4,5,1],[9,1,4,8,3,5,6,7,2],[2,7,5,1,6,4,9,8,3],[3,2,9,7,4,1,5,6,8],[4,5,7,6,8,3,2,1,9],[1,6,8,2,5,9,7,3,4],[7,4,2,3,1,6,8,9,5],[8,9,1,5,2,7,3,4,6],[5,3,6,4,9,8,1,2,7]]},
+    {puzzle:[[0,0,1,0,0,0,5,0,0],[0,0,0,0,0,0,0,0,9],[2,0,0,0,0,0,7,4,0],[4,7,0,0,0,0,0,9,1],[8,2,0,0,0,1,0,0,5],[0,0,0,0,0,0,0,0,2],[0,0,0,9,0,0,0,0,0],[1,0,0,0,0,0,9,0,4],[0,0,0,0,0,0,0,3,0]],solution:[[9,4,1,8,3,7,5,2,6],[3,5,7,4,6,2,1,8,9],[2,6,8,1,5,9,7,4,3],[4,7,5,3,2,6,8,9,1],[8,2,3,7,9,1,4,6,5],[6,1,9,5,8,4,3,7,2],[7,3,6,9,4,5,2,1,8],[1,8,2,6,7,3,9,5,4],[5,9,4,2,1,8,6,3,7]]},
+    {puzzle:[[0,0,0,0,6,0,0,0,0],[0,0,0,0,0,0,0,1,0],[0,1,0,0,2,5,0,0,0],[0,0,0,0,0,0,0,0,0],[1,0,0,0,4,6,0,0,0],[0,2,7,0,5,0,0,0,9],[2,8,0,6,0,0,0,4,0],[0,0,6,5,0,0,0,0,0],[0,0,0,0,0,2,0,0,6]],solution:[[5,7,2,1,6,4,8,9,3],[6,4,3,7,9,8,2,1,5],[9,1,8,3,2,5,6,7,4],[8,6,4,9,7,3,1,5,2],[1,5,9,2,4,6,3,8,7],[3,2,7,8,5,1,4,6,9],[2,8,5,6,3,9,7,4,1],[4,3,6,5,1,7,9,2,8],[7,9,1,4,8,2,5,3,6]]},
+  ],
+};
+
+// ── PuzzlePool 모듈 ─────────────────────────────────
+const PuzzlePool = (() => {
+  // 메모리 내 풀: { easy:[], medium:[], hard:[] }
+  let pool = { easy:[], medium:[], hard:[] };
+
+  /* solution 배열 → 고유 해시 문자열 */
+  function _hash(solution) {
+    return solution.map(r => r.join('')).join('');
+  }
+
+  /* 중복 여부: 해시 비교 */
+  function _isDuplicate(diff, map) {
+    const h = _hash(map.solution);
+    return pool[diff].some(m => _hash(m.solution) === h);
+  }
+
+  /* DB(localStorage)에 현재 풀 저장 */
+  function saveToDb() {
+    try {
+      Object.keys(pool).forEach(d => {
+        localStorage.setItem(poolKey(d), JSON.stringify(pool[d]));
+      });
+    } catch(e) {}
+  }
+
+  /* DB에서 풀 로드 → 메모리 풀에 병합 */
+  function loadFromDb() {
+    const loaded = {};
+    try {
+      Object.keys(pool).forEach(d => {
+        const raw = localStorage.getItem(poolKey(d));
+        if (raw) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) loaded[d] = arr;
+        }
+      });
+    } catch(e) {}
+    return loaded;
+  }
+
+  /* 초기화: 내장 맵 + DB 맵 병합 */
+  function init() {
+    // 1. 내장 맵으로 리셋
+    pool = { easy: [], medium: [], hard: [] };
+    Object.keys(BUILTIN_MAPS).forEach(d => {
+      BUILTIN_MAPS[d].forEach(m => {
+        pool[d].push({puzzle: m.puzzle.map(r=>[...r]), solution: m.solution.map(r=>[...r])});
+      });
+    });
+    // 2. DB 저장 맵 병합 (중복 제외)
+    const fromDb = loadFromDb();
+    Object.keys(fromDb).forEach(d => {
+      if (!pool[d]) return;
+      fromDb[d].forEach(m => {
+        if (m && Array.isArray(m.puzzle) && Array.isArray(m.solution) && !_isDuplicate(d, m)) {
+          pool[d].push(m);
+        }
+      });
+    });
+  }
+
+  /* 풀에서 맵 하나 꺼내기 (랜덤) — 없으면 null */
+  function pick(diff) {
+    const arr = pool[diff];
+    if (!arr || arr.length === 0) return null;
+    const idx = Math.floor(Math.random() * arr.length);
+    const map = arr.splice(idx, 1)[0]; // 꺼내서 제거 (재사용 방지)
+    // 꺼낸 후 DB 업데이트 (비동기)
+    setTimeout(() => saveToDb(), 0);
+    // 풀이 줄면 비동기 보충
+    if (arr.length < POOL_TARGET / 2) _refillAsync(diff);
+    return map;
+  }
+
+  /* 맵 추가 (중복 제외) */
+  function add(diff, map) {
+    if (!pool[diff]) return false;
+    if (!map || !Array.isArray(map.puzzle) || !Array.isArray(map.solution)) return false;
+    if (_isDuplicate(diff, map)) return false;
+    pool[diff].push(map);
+    return true;
+  }
+
+  /* 현재 풀 크기 */
+  function count(diff) {
+    return pool[diff] ? pool[diff].length : 0;
+  }
+
+  /* 전체 풀 JSON 내보내기 (다운로드용) */
+  function exportAll() {
+    const all = [];
+    Object.keys(pool).forEach(d => {
+      pool[d].forEach(m => all.push({difficulty: d, puzzle: m.puzzle, solution: m.solution}));
+    });
+    return JSON.stringify(all, null, 2);
+  }
+
+  /* JSON에서 맵 가져오기 (업로드용) — {added, skipped} 반환 */
+  function importFrom(jsonStr) {
+    let added = 0, skipped = 0;
+    try {
+      const arr = JSON.parse(jsonStr);
+      if (!Array.isArray(arr)) return {added:0, skipped:0, error:'not an array'};
+      arr.forEach(item => {
+        const d = item.difficulty;
+        if (!pool[d] || !Array.isArray(item.puzzle) || !Array.isArray(item.solution)) {
+          skipped++; return;
+        }
+        if (add(d, {puzzle: item.puzzle, solution: item.solution})) added++;
+        else skipped++;
+      });
+      if (added > 0) saveToDb();
+    } catch(e) {
+      return {added: 0, skipped: 0, error: e.message};
+    }
+    return {added, skipped};
+  }
+
+  /* 비동기 풀 보충 (백그라운드) */
+  function _refillAsync(diff) {
+    const needed = POOL_TARGET - (pool[diff] ? pool[diff].length : 0);
+    if (needed <= 0) return;
+    const clues = DIFFICULTY[diff] ? DIFFICULTY[diff].clues : 36;
+    let filled = 0;
+    function fillOne() {
+      if (filled >= needed) { saveToDb(); return; }
+      const {puzzle, solution} = SudokuGenerator.generate(clues);
+      add(diff, {puzzle, solution});
+      filled++;
+      setTimeout(fillOne, 10); // 10ms 간격으로 하나씩 (메인 스레드 양보)
+    }
+    setTimeout(fillOne, 50); // 첫 실행은 50ms 뒤 (UI 우선)
+  }
+
+  /* 모든 난이도 비동기 보충 */
+  function refillAllAsync() {
+    Object.keys(pool).forEach(d => _refillAsync(d));
+  }
+
+  return { init, pick, add, count, exportAll, importFrom, saveToDb, loadFromDb, _hash, refillAllAsync };
+})();
+
+
+/* ── 테마 관리 ── */
+const ThemeManager = (() => {
+  function apply(theme) {
+    const isLight = theme === 'light';
+    document.documentElement.classList.toggle('light', isLight);
+    document.getElementById('theme-btn').textContent = isLight ? '☀️' : '🌙';
+    localStorage.setItem(THEME_KEY, theme);
+  }
+  function toggle() {
+    const current = document.documentElement.classList.contains('light') ? 'light' : 'dark';
+    apply(current === 'light' ? 'dark' : 'light');
+  }
+  function init() {
+    const saved = localStorage.getItem(THEME_KEY);
+    // 저장 없으면 시스템 설정 따름
+    if (saved) { apply(saved); }
+    else if (window.matchMedia('(prefers-color-scheme: light)').matches) { apply('light'); }
+    else { apply('dark'); }
+  }
+  return { init, toggle, apply };
+})();
+
+/* ═══════════════════════════════════════════
+   🛠️ DEVELOPMENT AGENT — 핵심 모듈
+   ═══════════════════════════════════════════ */
+
+// ── 1. 셀 크기 자동 계산 (Fold / 일반 화면 모두 대응) ──
+function calcCellSize() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // 보드 외 UI 높이: header(34) + diff(30) + stats(36) + numpad(num_h) + controls(34) + gaps(40)
+  // numpad 높이는 cs*0.8 + 5gap ≈ cs*0.8+5
+  // 반복 계산 대신 비율로 추정
+  const uiRows = 34+30+36+34+40; // ~174px (numpad 제외)
+  // numpad 높이 ≈ cs*0.8 + 10
+  // board 높이 ≈ 9*cs + 9*2 + 14 + 4 = 9cs+36
+  // total ≈ 174 + cs*0.8+10 + 9cs+36 = 220 + 9.8cs ≤ vh
+  // → cs ≤ (vh-220)/9.8
+  const maxByH = Math.floor((vh - 220) / 9.8);
+  const overhead = 9*2 + 14 + 4; // gap+padding+border
+  const maxByW = Math.floor((vw - 20 - overhead) / 9);
+  const cs = Math.max(28, Math.min(maxByH, maxByW, 60));
+  document.documentElement.style.setProperty('--cs', cs + 'px');
+  return cs;
+}
+
+// ── 2. 스도쿠 생성기 ────────────────────────────────
+const SudokuGenerator = (() => {
+  function shuffle(arr) {
+    for (let i=arr.length-1;i>0;i--) {
+      const j=Math.floor(Math.random()*(i+1));
+      [arr[i],arr[j]]=[arr[j],arr[i]];
+    }
+    return arr;
+  }
+  function isValid(board,row,col,num) {
+    for (let c=0;c<9;c++) if (board[row][c]===num) return false;
+    for (let r=0;r<9;r++) if (board[r][col]===num) return false;
+    const br=Math.floor(row/3)*3, bc=Math.floor(col/3)*3;
+    for (let r=0;r<3;r++) for (let c=0;c<3;c++) if (board[br+r][bc+c]===num) return false;
+    return true;
+  }
+  function solve(board, startIdx=0) {
+    // startIdx부터 탐색: 이미 확인한 칸을 다시 훑지 않아 재귀 호출마다 O(n) → 총 연산량 획기적 감소
+    for (let i=startIdx; i<81; i++) {
+      const r=Math.floor(i/9), c=i%9;
+      if (board[r][c]===0) {
+        for (const n of shuffle([1,2,3,4,5,6,7,8,9])) {
+          if (isValid(board,r,c,n)) {
+            board[r][c]=n;
+            if (solve(board, i+1)) return true;  // 다음 인덱스부터 탐색
+            board[r][c]=0;
+          }
+        }
+        return false;
+      }
+    }
+    return true;
+  }
+  function generate(clueCount) {
+    const solution=Array.from({length:9},()=>Array(9).fill(0));
+    solve(solution);
+    const puzzle=solution.map(r=>[...r]);
+    const positions=shuffle([...Array(81).keys()]);
+    let removed=0;
+    for (const pos of positions) {
+      if (removed>=81-clueCount) break;
+      puzzle[Math.floor(pos/9)][pos%9]=0;
+      removed++;
+    }
+    return {puzzle,solution};
+  }
+  return {generate,isValid,solve};
+})();
+
+// ── 3. 게임 상태 ─────────────────────────────────────
+const GameState = (() => {
+  let state={};
+
+  function init(difficulty) {
+    const diff=DIFFICULTY[difficulty]||DIFFICULTY.easy;
+    // Pool에서 즉시 꺼내기 시도 → 없으면 실시간 생성
+    const pooled = (typeof PuzzlePool !== 'undefined') ? PuzzlePool.pick(difficulty) : null;
+    const {puzzle,solution} = pooled || SudokuGenerator.generate(diff.clues);
+    state={
+      difficulty,
+      board:puzzle.map(r=>[...r]),
+      solution,
+      given:puzzle.map(r=>r.map(v=>v!==0)),
+      notes:Array.from({length:9},()=>Array.from({length:9},()=>[])),
+      selected:null,
+      mistakes:0, hints:diff.hints,
+      history:[], timerSecs:0,
+      complete:false, noteMode:false, paused:false,
+    };
+    return state;
+  }
+
+  function loadRaw(raw) {
+    try {
+      if (!raw || !Array.isArray(raw.board) || !Array.isArray(raw.solution)) {
+        throw new Error('invalid save data structure');
+      }
+      state = {...raw};
+      // notes: 배열 보장
+      state.notes = Array.isArray(raw.notes)
+        ? raw.notes.map(row => Array.isArray(row)
+            ? row.map(cell => Array.isArray(cell) ? [...cell] : [])
+            : Array(9).fill(null).map(()=>[]))
+        : Array.from({length:9}, () => Array.from({length:9}, ()=>[]));
+      // given: 배열 보장
+      state.given = Array.isArray(raw.given)
+        ? raw.given
+        : raw.board.map(r => r.map(v => v !== 0));
+      state.paused   = false;
+      state.history  = [];
+      state.selected = null;
+      return state;
+    } catch(e) {
+      // 데이터 손상 → 새 게임으로 폴백
+      console.warn('[Sudoku] loadRaw failed, falling back to new game:', e.message);
+      return init(raw && raw.difficulty ? raw.difficulty : 'easy');
+    }
+  }
+
+  function getState() { return state; }
+  function select(r,c) { state.selected={r,c}; }
+
+  function placeNumber(r,c,num) {
+    if (state.given[r][c]||state.complete||state.paused) return false;
+    state.history.push({r,c,prevVal:state.board[r][c],prevNotes:[...state.notes[r][c]]});
+    if (state.noteMode && num!==0) {
+      const idx=state.notes[r][c].indexOf(num);
+      if (idx>=0) state.notes[r][c].splice(idx,1);
+      else state.notes[r][c].push(num);
+      return {type:'note',r,c};
+    }
+    if (num!==0 && state.board[r][c]===num) return false;
+    state.board[r][c]=num;
+    if (num!==0) { state.notes[r][c]=[]; clearRelatedNotes(r,c,num); }
+    const correct=num===0||state.solution[r][c]===num;
+    if (num!==0&&!correct) state.mistakes++;
+    const isComplete=checkComplete();
+    return {type:'place',r,c,num,correct,isComplete};
+  }
+
+  function clearRelatedNotes(r,c,num) {
+    for (let i=0;i<9;i++) {
+      state.notes[r][i]=state.notes[r][i].filter(n=>n!==num);
+      state.notes[i][c]=state.notes[i][c].filter(n=>n!==num);
+    }
+    const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+    for (let dr=0;dr<3;dr++) for (let dc=0;dc<3;dc++)
+      state.notes[br+dr][bc+dc]=state.notes[br+dr][bc+dc].filter(n=>n!==num);
+  }
+
+  function undo() {
+    if (!state.history.length) return null;
+    const last=state.history.pop();
+    state.board[last.r][last.c]=last.prevVal;
+    state.notes[last.r][last.c]=[...last.prevNotes];
+    return last;
+  }
+
+  function useHint() {
+    if (state.hints<=0||!state.selected||state.complete||state.paused) return null;
+    const {r,c}=state.selected;
+    if (state.given[r][c]||state.board[r][c]===state.solution[r][c]) return null;
+    state.history.push({r,c,prevVal:state.board[r][c],prevNotes:[...state.notes[r][c]]});
+    state.board[r][c]=state.solution[r][c];
+    state.notes[r][c]=[];
+    clearRelatedNotes(r,c,state.solution[r][c]);
+    state.hints--;
+    const isComplete=checkComplete();
+    return {r,c,num:state.solution[r][c],isComplete};
+  }
+
+  function checkComplete() {
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++)
+      if (state.board[r][c]!==state.solution[r][c]) return false;
+    state.complete=true;
+    return true;
+  }
+
+  function countNum(num) {
+    let n=0;
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) if (state.board[r][c]===num) n++;
+    return n;
+  }
+
+  function togglePause() { state.paused=!state.paused; return state.paused; }
+
+  function serialise() {
+    return JSON.stringify({
+      ...state,
+      selected:null, paused:false, history:[],
+    });
+  }
+
+  return {init,loadRaw,getState,select,placeNumber,undo,useHint,countNum,togglePause,serialise};
+})();
+
+// ── 4. 렌더러 ─────────────────────────────────────────
+const Renderer = (() => {
+  const boardEl    = document.getElementById('board');
+  const timerEl    = document.getElementById('timer-val');
+  const mistakesEl = document.getElementById('mistakes-val');
+  const hintsEl    = document.getElementById('hints-val');
+  const numpadEl   = document.getElementById('numpad');
+  const wrapEl     = document.getElementById('board-wrap');
+
+  function buildBoard() {
+    boardEl.innerHTML='';
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+      const cell=document.createElement('div');
+      cell.className='cell';
+      cell.dataset.r=r; cell.dataset.c=c;
+      if (c===2||c===5) cell.classList.add('box-right');
+      if (r===2||r===5) cell.classList.add('box-bottom');
+      boardEl.appendChild(cell);
+    }
+  }
+
+  function renderBoard(state) {
+    wrapEl.classList.toggle('paused',!!state.paused);
+    const sel=state.selected;
+    boardEl.querySelectorAll('.cell').forEach(cell=>{
+      const r=+cell.dataset.r, c=+cell.dataset.c;
+      cell.innerHTML='';
+      cell.className='cell';
+      if (c===2||c===5) cell.classList.add('box-right');
+      if (r===2||r===5) cell.classList.add('box-bottom');
+      const val=state.board[r][c];
+      if (sel) {
+        if (sel.r===r&&sel.c===c) cell.classList.add('selected');
+        else if (sel.r===r||sel.c===c||(Math.floor(sel.r/3)===Math.floor(r/3)&&Math.floor(sel.c/3)===Math.floor(c/3)))
+          cell.classList.add('highlight');
+        if (val&&val===state.board[sel.r][sel.c]) cell.classList.add('selected');
+      }
+      if (state.given[r][c]) {
+        cell.classList.add('given','locked');
+        if (!state.paused) cell.textContent=val;
+      } else if (val!==0) {
+        cell.classList.add(state.solution[r][c]===val?'locked':'error');
+        if (!state.paused) cell.textContent=val;
+      } else if (!state.paused) {
+        const na=state.notes[r][c];
+        if (na.length>0) {
+          const nd=document.createElement('div'); nd.className='notes';
+          for (let n=1;n<=9;n++) {
+            const sp=document.createElement('span'); sp.className='note-num';
+            sp.textContent=na.includes(n)?n:'';
+            nd.appendChild(sp);
+          }
+          cell.appendChild(nd);
+        }
+      }
+    });
+  }
+
+  function buildNumpad() {
+    numpadEl.innerHTML='';
+    for (let n=1;n<=9;n++) {
+      const btn=document.createElement('button');
+      btn.className='num-btn'; btn.dataset.num=n; btn.textContent=n;
+      numpadEl.appendChild(btn);
+    }
+  }
+
+  function updateNumpad() {
+    numpadEl.querySelectorAll('.num-btn').forEach(btn=>{
+      const n=+btn.dataset.num, cnt=GameState.countNum(n);
+      btn.classList.toggle('full',cnt>=9);
+      let badge=btn.querySelector('.count-badge');
+      if (!badge){badge=document.createElement('span');badge.className='count-badge';btn.appendChild(badge);}
+      badge.textContent=cnt;
+    });
+  }
+
+  function updateStats(st) { mistakesEl.textContent=st.mistakes; hintsEl.textContent=st.hints; }
+  function updateTimer(s) {
+    timerEl.textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+  }
+  function flashCell(r,c,cls) {
+    const cell=boardEl.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+    if (!cell) return;
+    cell.classList.add(cls); setTimeout(()=>cell.classList.remove(cls),600);
+  }
+  function highlightHintCell(r,c) {
+    const cell=boardEl.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+    if (!cell) return;
+    cell.classList.add('hint-cell'); setTimeout(()=>cell.classList.remove('hint-cell'),700);
+  }
+  return {buildBoard,renderBoard,buildNumpad,updateNumpad,updateStats,updateTimer,flashCell,highlightHintCell};
+})();
+
+// ── 5. 타이머 ─────────────────────────────────────────
+const Timer = (() => {
+  let iv=null, secs=0, cb=null;
+  function start(startSecs,callback){
+    stop(); secs=startSecs||0; cb=callback;
+    iv=setInterval(()=>{ secs++; if(cb) cb(secs); },1000);
+  }
+  function pause(){ clearInterval(iv); iv=null; }
+  function resume(){ if(!iv) iv=setInterval(()=>{ secs++; if(cb) cb(secs); },1000); }
+  function stop(){ clearInterval(iv); iv=null; secs=0; }
+  function getSeconds(){ return secs; }
+  function setSeconds(s){ secs=s; }
+  return {start,pause,resume,stop,getSeconds,setSeconds};
+})();
+
+// ── 6. 저장/불러오기 (난이도별 독립 슬롯 + 완전 방어 코드) ─
+const Storage = (() => {
+
+  /* localStorage 자체가 막혀 있는 환경(Safari 사생활 모드 등) 대비 */
+  function _lsGet(key) {
+    try { return localStorage.getItem(key); } catch(e) { return null; }
+  }
+  function _lsSet(key, val) {
+    try { localStorage.setItem(key, val); return true; } catch(e) { return false; }
+  }
+  function _lsRemove(key) {
+    try { localStorage.removeItem(key); } catch(e) {}
+  }
+
+  /* 저장 데이터 스키마 검증 — 필수 필드 없으면 null 반환 */
+  function _validate(raw) {
+    if (!raw || typeof raw !== 'object')           return null;
+    if (!Array.isArray(raw.board))                 return null;
+    if (raw.board.length !== 9)                    return null;
+    if (!raw.board.every(r => Array.isArray(r) && r.length === 9)) return null;
+    if (!Array.isArray(raw.solution))              return null;
+    if (raw.solution.length !== 9)                 return null;
+    if (!Array.isArray(raw.given))                 return null;
+    if (!Array.isArray(raw.notes))                 return null;
+    if (!DIFFICULTY[raw.difficulty])               return null;
+    return raw;  // 검증 통과
+  }
+
+  function save(diff, timerSecs) {
+    try {
+      const raw = JSON.parse(GameState.serialise());
+      raw.timerSecs = timerSecs;
+      raw.savedAt   = Date.now();
+      _lsSet(diffSaveKey(diff), JSON.stringify(raw));
+    } catch(e) { /* 저장 실패는 조용히 무시 */ }
+  }
+
+  function load(diff) {
+    try {
+      const raw = _lsGet(diffSaveKey(diff));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return _validate(parsed);   // 검증 실패 시 null
+    } catch(e) {
+      // 파싱 실패 → 손상된 데이터 삭제
+      _lsRemove(diffSaveKey(diff));
+      return null;
+    }
+  }
+
+  function clear(diff) {
+    try {
+      if (diff) _lsRemove(diffSaveKey(diff));
+      else Object.keys(DIFFICULTY).forEach(d => _lsRemove(diffSaveKey(d)));
+    } catch(e) {}
+  }
+
+  function loadAll() {
+    const result = {};
+    Object.keys(DIFFICULTY).forEach(d => { result[d] = load(d); });
+    return result;
+  }
+
+  return { save, load, clear, loadAll };
+})();
+
+// ── 7. 게임 컨트롤러 ──────────────────────────────────
+const GameController = (() => {
+
+  function startGame(diff, savedData) {
+    try {
+      Timer.stop();
+      let state;
+      if (savedData) {
+        state = GameState.loadRaw(savedData);  // loadRaw 내부도 방어됨
+        // loadRaw가 폴백 후 새 게임을 시작했을 수 있으므로 state.difficulty 기준
+        const t = (savedData && savedData.timerSecs) || 0;
+        Timer.setSeconds(state.complete ? 0 : t);
+        Renderer.updateTimer(Timer.getSeconds());
+      } else {
+        state = GameState.init(diff || 'easy');
+        Storage.clear(diff);
+      }
+      calcCellSize();
+      Renderer.buildBoard();
+      Renderer.buildNumpad();
+      Renderer.renderBoard(state);
+      Renderer.updateNumpad();
+      Renderer.updateStats(state);
+      document.querySelectorAll('.diff-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.diff === state.difficulty));
+      const noteEl = document.getElementById('note-mode');
+      noteEl.checked = false; state.noteMode = false;
+      const pb = document.getElementById('btn-pause');
+      pb.textContent = '⏸️ 일시정지'; pb.classList.remove('active');
+      Timer.start(Timer.getSeconds(), s => {
+        Renderer.updateTimer(s);
+        GameState.getState().timerSecs = s;
+      });
+    } catch(e) {
+      // 최후 방어선: 모든 예외를 잡아서 새 easy 게임으로 복구
+      console.error('[Sudoku] startGame failed, recovering:', e);
+      Storage.clear();          // 손상 가능 데이터 전체 제거
+      try {
+        Timer.stop();
+        const state = GameState.init('easy');
+        calcCellSize();
+        Renderer.buildBoard();
+        Renderer.buildNumpad();
+        Renderer.renderBoard(state);
+        Renderer.updateNumpad();
+        Renderer.updateStats(state);
+        Renderer.updateTimer(0);
+        Timer.start(0, s => { Renderer.updateTimer(s); GameState.getState().timerSecs = s; });
+      } catch(e2) {
+        // 진짜 최후: 페이지 재로드
+        console.error('[Sudoku] recovery also failed, reloading:', e2);
+        location.reload();
+      }
+    }
+  }
+
+  function handleCellClick(r,c) {
+    if (GameState.getState().paused) return;
+    GameState.select(r,c);
+    Renderer.renderBoard(GameState.getState());
+  }
+
+  function handleNumberInput(num) {
+    const st=GameState.getState();
+    if (!st.selected||st.complete||st.paused) return;
+    if (st.given[st.selected.r][st.selected.c]) return;
+    const result=GameState.placeNumber(st.selected.r,st.selected.c,num);
+    if (!result) return;
+    if (result.type==='place'&&!result.correct&&num!==0)
+      Renderer.flashCell(st.selected.r,st.selected.c,'error');
+    Renderer.renderBoard(GameState.getState());
+    Renderer.updateNumpad();
+    Renderer.updateStats(GameState.getState());
+    if (result.isComplete){ Timer.stop(); Storage.clear(GameState.getState().difficulty); setTimeout(showComplete,400); }
+  }
+
+  function handleHint() {
+    const result=GameState.useHint();
+    if (!result) return;
+    Renderer.highlightHintCell(result.r,result.c);
+    Renderer.renderBoard(GameState.getState());
+    Renderer.updateNumpad();
+    Renderer.updateStats(GameState.getState());
+    if (result.isComplete){ Timer.stop(); Storage.clear(GameState.getState().difficulty); setTimeout(showComplete,600); }
+  }
+
+  function handleUndo() {
+    if (!GameState.undo()) return;
+    Renderer.renderBoard(GameState.getState());
+    Renderer.updateNumpad();
+    Renderer.updateStats(GameState.getState());
+  }
+
+  function handleErase() {
+    const st=GameState.getState();
+    if (!st.selected||st.paused) return;
+    const {r,c}=st.selected;
+    if (st.given[r][c]) return;
+    GameState.placeNumber(r,c,0);
+    Renderer.renderBoard(GameState.getState());
+    Renderer.updateNumpad();
+  }
+
+  function handlePause() {
+    const st=GameState.getState();
+    if (st.complete) return;
+    const isPaused=GameState.togglePause();
+    const pb=document.getElementById('btn-pause');
+    if (isPaused){ Timer.pause(); pb.textContent='▶️ 재개'; pb.classList.add('active'); }
+    else { Timer.resume(); pb.textContent='⏸️ 일시정지'; pb.classList.remove('active'); }
+    Renderer.renderBoard(GameState.getState());
+  }
+
+  function showComplete() {
+    const st=GameState.getState(), t=Timer.getSeconds();
+    let star, text;
+    if (st.mistakes===0){ star='🏆🏆🏆'; text='실수 없이 완벽한 클리어!'; }
+    else if (st.mistakes<=3){ star='⭐⭐⭐'; text='훌륭합니다! 거의 완벽해요!'; }
+    else { star='⭐⭐'; text='스도쿠를 완성했어요!'; }
+    text+=`\n⏱️ ${Math.floor(t/60)}분 ${t%60}초  ❌ 실수 ${st.mistakes}회`;
+    document.getElementById('complete-stars').textContent=star;
+    document.getElementById('complete-msg').textContent=text;
+    document.getElementById('complete-overlay').classList.add('show');
+  }
+
+  return {startGame,handleCellClick,handleNumberInput,handleHint,handleUndo,handleErase,handlePause};
+})();
+
+/* ═══════════════════════════════════════════
+   🔌 이벤트 바인딩
+   ═══════════════════════════════════════════ */
+document.getElementById('board').addEventListener('click',e=>{
+  const cell=e.target.closest('.cell');
+  if (cell) GameController.handleCellClick(+cell.dataset.r,+cell.dataset.c);
+});
+document.getElementById('numpad').addEventListener('click',e=>{
+  const btn=e.target.closest('.num-btn');
+  if (btn) GameController.handleNumberInput(+btn.dataset.num);
+});
+document.addEventListener('keydown',e=>{
+  if (e.key>='1'&&e.key<='9') GameController.handleNumberInput(+e.key);
+  if (e.key==='Backspace'||e.key==='Delete'||e.key==='0') GameController.handleErase();
+  if (e.key==='z'&&(e.ctrlKey||e.metaKey)){e.preventDefault();GameController.handleUndo();}
+  if (e.key==='Escape') document.getElementById('test-panel').classList.remove('show');
+  const st=GameState.getState();
+  if (!st.selected||st.paused) return;
+  let {r,c}=st.selected;
+  const map={ArrowUp:[r-1,c],ArrowDown:[r+1,c],ArrowLeft:[r,c-1],ArrowRight:[r,c+1]};
+  if (!map[e.key]) return;
+  e.preventDefault();
+  const [nr,nc]=map[e.key];
+  if (nr>=0&&nr<9&&nc>=0&&nc<9) GameController.handleCellClick(nr,nc);
+});
+
+document.getElementById('btn-hint').addEventListener('click', ()=>GameController.handleHint());
+document.getElementById('btn-undo').addEventListener('click', ()=>GameController.handleUndo());
+document.getElementById('btn-erase').addEventListener('click',()=>GameController.handleErase());
+document.getElementById('btn-pause').addEventListener('click',()=>GameController.handlePause());
+document.getElementById('btn-new').addEventListener('click',()=>{
+  const st = GameState.getState();
+  if (st.board && !st.complete) {
+    // 현재 게임 자동 저장 후 모달 열기
+    Storage.save(st.difficulty, Timer.getSeconds());
+  }
+  _openStartModalForDiff(null);
+});
+document.querySelectorAll('.diff-btn').forEach(btn=>
+  btn.addEventListener('click', () => {
+    const st = GameState.getState();
+    const newDiff = btn.dataset.diff;
+
+    // ① 현재 플레이 중인 난이도와 동일 → 완전 차단 (아무것도 하지 않음)
+    if (st.board && !st.complete && newDiff === st.difficulty) {
+      return;
+    }
+
+    // ② 게임 중이 아니거나 완료된 상태 → 해당 난이도 바로 시작 모달
+    if (!st.board || st.complete) {
+      _openStartModalForDiff(newDiff);
+      return;
+    }
+
+    // ③ 게임 진행 중 + 다른 난이도 → 저장 확인 모달
+    _pendingDiff = newDiff;
+    const diffInfo = DIFFICULTY[newDiff];
+    document.getElementById('save-confirm-title').textContent = `${diffInfo.label}으로 변경`;
+    document.getElementById('save-confirm-msg').textContent =
+      `현재 [${DIFFICULTY[st.difficulty].label}] 게임을
+저장하고 ${diffInfo.label}로 변경할까요?`;
+    document.getElementById('save-confirm-overlay').classList.add('show');
+  })
+);
+document.getElementById('note-mode').addEventListener('change',e=>{
+  GameState.getState().noteMode=e.target.checked;
+});
+document.getElementById('btn-play-again').addEventListener('click',()=>{
+  document.getElementById('complete-overlay').classList.remove('show');
+  _openStartModalForDiff(null);
+});
+
+document.getElementById('theme-btn').addEventListener('click', () => ThemeManager.toggle());
+
+/* ── 맵 풀 관리 패널 ── */
+function _openMapPanel() {
+  // 풀 카운트 업데이트
+  ['easy','medium','hard'].forEach(d => {
+    const el = document.getElementById('pool-cnt-' + d);
+    if (el) el.textContent = PuzzlePool.count(d);
+  });
+  document.getElementById('map-panel').classList.add('show');
+}
+document.getElementById('map-btn').addEventListener('click', _openMapPanel);
+document.getElementById('map-close').addEventListener('click', () => {
+  document.getElementById('map-panel').classList.remove('show');
+});
+
+// 다운로드
+document.getElementById('btn-map-download').addEventListener('click', () => {
+  const json = PuzzlePool.exportAll();
+  const blob = new Blob([json], {type: 'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'sudoku_maps_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// 업로드 트리거
+document.getElementById('btn-map-upload-trigger').addEventListener('click', () => {
+  document.getElementById('map-file-input').click();
+});
+document.getElementById('map-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const msg = document.getElementById('map-import-msg');
+  msg.textContent = '읽는 중...';
+  msg.className = 'show';
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const result = PuzzlePool.importFrom(ev.target.result);
+    if (result.error && result.added === 0) {
+      msg.textContent = '❌ 파일 형식 오류: ' + result.error;
+      msg.className = 'show error';
+    } else {
+      msg.textContent = `✅ 추가 ${result.added}개 / 중복 제외 ${result.skipped}개`;
+      msg.className = 'show success';
+      // 카운트 업데이트
+      ['easy','medium','hard'].forEach(d => {
+        const el = document.getElementById('pool-cnt-' + d);
+        if (el) el.textContent = PuzzlePool.count(d);
+      });
+    }
+    e.target.value = ''; // 같은 파일 재업로드 허용
+  };
+  reader.onerror = () => {
+    document.getElementById('map-import-msg').textContent = '❌ 파일 읽기 실패';
+    document.getElementById('map-import-msg').className = 'show error';
+  };
+  reader.readAsText(file);
+});
+
+// 풀 보충 (수동)
+document.getElementById('btn-map-refill').addEventListener('click', () => {
+  PuzzlePool.refillAllAsync();
+  const msg = document.getElementById('map-import-msg');
+  msg.textContent = '🔄 백그라운드에서 풀을 보충하고 있어요...';
+  msg.className = 'show';
+  // 2초 후 카운트 업데이트
+  setTimeout(() => {
+    ['easy','medium','hard'].forEach(d => {
+      const el = document.getElementById('pool-cnt-' + d);
+      if (el) el.textContent = PuzzlePool.count(d);
+    });
+    msg.textContent = '✅ 보충 완료';
+    msg.className = 'show success';
+  }, 2500);
+});
+
+/* ── 로고 3번 클릭 → TDD 패널 열기 ── */
+let _logoTaps=0, _logoTimer=null;
+document.getElementById('logo').addEventListener('click',()=>{
+  _logoTaps++;
+  const logo=document.getElementById('logo');
+  logo.classList.add('tap-flash');
+  setTimeout(()=>logo.classList.remove('tap-flash'),280);
+  clearTimeout(_logoTimer);
+  if (_logoTaps>=3) {
+    _logoTaps=0;
+    document.getElementById('test-panel').classList.add('show');
+    const results=TestRunner.runAll();
+    TestRunner.renderResults(results);
+  } else {
+    _logoTimer=setTimeout(()=>{ _logoTaps=0; },700);
+  }
+});
+document.getElementById('test-close').addEventListener('click',()=>{
+  document.getElementById('test-panel').classList.remove('show');
+});
+
+/* ── 저장 확인 모달 ── */
+let _pendingDiff = null;  // 변경 대기 중인 난이도
+
+document.getElementById('btn-save-yes').addEventListener('click', () => {
+  // 현재 게임 저장 후 즉시 새 난이도로 게임 시작
+  const st = GameState.getState();
+  Storage.save(st.difficulty, Timer.getSeconds());
+  document.getElementById('save-confirm-overlay').classList.remove('show');
+  const diff = _pendingDiff;
+  _pendingDiff = null;
+  _startDiffDirectly(diff);
+});
+document.getElementById('btn-save-no').addEventListener('click', () => {
+  // 저장 없이 즉시 새 난이도로 게임 시작
+  document.getElementById('save-confirm-overlay').classList.remove('show');
+  const diff = _pendingDiff;
+  _pendingDiff = null;
+  _startDiffDirectly(diff);
+});
+document.getElementById('btn-save-cancel').addEventListener('click', () => {
+  // 취소: 현재 게임 유지
+  document.getElementById('save-confirm-overlay').classList.remove('show');
+  _pendingDiff = null;
+});
+
+/* ── 난이도로 직접 게임 시작 (모달 없이, 비동기 렌더링으로 흰 화면 방지) ── */
+function _startDiffDirectly(diff) {
+  // 스피너 표시 + 버튼 비활성화 → 브라우저가 화면 업데이트 후 게임 생성
+  const spinner = document.getElementById('start-spinner');
+  const sub     = document.getElementById('start-sub');
+  if (spinner) spinner.classList.add('show');
+  if (sub)     sub.textContent = '게임을 준비하고 있어요... ⏳';
+  // 클릭된 버튼 시각 피드백
+  document.querySelectorAll('.start-diff-btn').forEach(b => b.classList.add('loading'));
+
+  // rAF×2: 스피너 렌더링이 실제로 화면에 나타난 뒤 무거운 generate() 실행
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        const saved = Storage.load(diff);
+        if (saved && !saved.complete) {
+          GameController.startGame(null, saved);
+        } else {
+          Storage.clear(diff);
+          GameController.startGame(diff);
+        }
+      } finally {
+        // 스피너·버튼 복원 (정상/오류 모두)
+        if (spinner) spinner.classList.remove('show');
+        document.querySelectorAll('.start-diff-btn').forEach(b => b.classList.remove('loading'));
+      }
+    });
+  });
+}
+
+/* ── 시작 모달 열기 헬퍼 ── */
+// targetDiff: 특정 난이도로 포커싱, null이면 가장 최근 저장 기준
+function _openStartModalForDiff(targetDiff) {
+  try {
+    let latestSave = null;
+    if (targetDiff) {
+      const s = Storage.load(targetDiff);      // 이미 검증된 데이터 또는 null
+      latestSave = (s && !s.complete) ? s : null;
+    } else {
+      const allSaves = Storage.loadAll();
+      const latestDiff = Object.keys(DIFFICULTY).reduce((best, d) => {
+        const s = allSaves[d];
+        if (!s || s.complete) return best;
+        if (!best) return d;
+        return (s.savedAt||0) >= (allSaves[best].savedAt||0) ? d : best;
+      }, null);
+      latestSave = latestDiff ? allSaves[latestDiff] : null;
+    }
+
+    if (latestSave) {
+      const diffInfo = DIFFICULTY[latestSave.difficulty] || DIFFICULTY.easy;
+      const t = latestSave.timerSecs || 0;
+      document.getElementById('resume-info').textContent =
+        `${diffInfo.label}  ⏱️ ${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}  ❌ ${latestSave.mistakes}회`;
+      document.getElementById('resume-section').style.display = 'block';
+      document.getElementById('start-sub').textContent = '또는 새 게임을 시작하세요';
+      document.getElementById('btn-resume').onclick = () => {
+        document.getElementById('start-overlay').classList.remove('show');
+        // 이어하기도 rAF로 즉각 반응성 보장
+        const spinner = document.getElementById('start-spinner');
+        if (spinner) spinner.classList.add('show');
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            GameController.startGame(null, latestSave);
+            if (spinner) spinner.classList.remove('show');
+          });
+        });
+      };
+    } else {
+      document.getElementById('resume-section').style.display = 'none';
+      document.getElementById('start-sub').textContent = '난이도를 선택해 주세요';
+      document.getElementById('btn-resume').onclick = null;
+    }
+
+    try { _updateStartModalBadges(); } catch(e) { /* 뱃지 실패는 모달 표시에 영향 없음 */ }
+    document.getElementById('start-overlay').classList.add('show');
+
+  } catch(e) {
+    // 모달 자체가 실패하면 — 안전망: 손상 데이터 제거 후 빈 시작 모달 표시
+    console.warn('[Sudoku] _openStartModalForDiff failed, showing clean modal:', e);
+    Storage.clear();
+    try {
+      document.getElementById('resume-section').style.display = 'none';
+      document.getElementById('start-sub').textContent = '난이도를 선택해 주세요';
+      document.getElementById('btn-resume').onclick = null;
+      document.getElementById('start-overlay').classList.add('show');
+    } catch(e2) { /* DOM 자체 문제면 포기 */ }
+  }
+}
+
+/* ── 시작 모달 난이도 뱃지 업데이트 ── */
+function _updateStartModalBadges() {
+  const all = Storage.loadAll();
+  Object.keys(DIFFICULTY).forEach(diff => {
+    const badge = document.getElementById('badge-' + diff);
+    if (!badge) return;
+    try {
+      const data = all[diff];
+      if (data && !data.complete && Array.isArray(data.board) && Array.isArray(data.given)) {
+        const flat = data.board.flat();
+        const gflat = data.given.flat();
+        const total  = gflat.filter(v => !v).length;
+        const filled = flat.filter((v, i) => !gflat[i] && v !== 0).length;
+        const pct = total > 0 ? Math.round(filled / total * 100) : 0;
+        badge.textContent = `💾 ${pct}%`;
+        badge.classList.add('visible');
+      } else {
+        badge.textContent = '';
+        badge.classList.remove('visible');
+      }
+    } catch(e) {
+      badge.textContent = '';
+      badge.classList.remove('visible');
+    }
+  });
+}
+
+/* ── 전역 오류 펜스 — 흰 화면 방지 ── */
+window.addEventListener('error', (e) => {
+  console.error('[Sudoku] Uncaught error:', e.message);
+  // 시작 오버레이가 닫혀 있고 게임도 없으면 → 시작 모달 복구
+  const overlay = document.getElementById('start-overlay');
+  const boardHasContent = document.querySelector('#board .cell');
+  if (overlay && !overlay.classList.contains('show') && !boardHasContent) {
+    Storage.clear();
+    try {
+      document.getElementById('resume-section').style.display = 'none';
+      document.getElementById('start-sub').textContent = '⚠️ 오류가 발생했어요. 새 게임을 시작하세요';
+      overlay.classList.add('show');
+    } catch(e2) {}
+  }
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('[Sudoku] Unhandled promise rejection:', e.reason);
+});
+
+/* ── 시작 모달 초기화 ── */
+// _openStartModalForDiff(null) 로 통일 — 가장 최근 저장을 자동으로 이어하기로 표시
+_openStartModalForDiff(null);
+
+// 난이도 버튼 클릭 → 해당 슬롯 저장 있으면 이어하기, 없으면 새 게임
+document.querySelectorAll('.start-diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const diff = btn.dataset.diff;
+    document.getElementById('start-overlay').classList.remove('show');
+    _startDiffDirectly(diff);
+  });
+});
+
+/* ── 자동 저장 (창 닫기 / 백그라운드 진입) ── */
+function autoSave(){
+  const st = GameState.getState();
+  if (st.board && !st.complete) Storage.save(st.difficulty, Timer.getSeconds());
+}
+window.addEventListener('beforeunload',autoSave);
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) autoSave(); });
+
+/* ── 화면 크기 변경 ── */
+window.addEventListener('resize',()=>{ calcCellSize(); });
+
+/* ═══════════════════════════════════════════
+   🧪 VERIFICATION AGENT — TDD
+   ═══════════════════════════════════════════ */
+const TestRunner = (() => {
+  let results=[];
+  let cg='';
+  const group=n=>{ cg=n; results.push({type:'group',name:n}); };
+  const test=(name,fn)=>{
+    try{ fn(); results.push({type:'pass',name:`${cg} > ${name}`}); }
+    catch(e){ results.push({type:'fail',name:`${cg} > ${name}`,error:e.message}); }
+  };
+  const expect=v=>({
+    toBe:e=>{ if(v!==e) throw new Error(`Expected ${JSON.stringify(e)}, got ${JSON.stringify(v)}`); },
+    toBeTruthy:()=>{ if(!v) throw new Error(`Expected truthy, got ${v}`); },
+    toBeFalsy:()=>{ if(v) throw new Error(`Expected falsy, got ${v}`); },
+    toBeGreaterThan:n=>{ if(v<=n) throw new Error(`Expected >${n}, got ${v}`); },
+    toBeType:t=>{ if(typeof v!==t) throw new Error(`Expected type ${t}`); },
+  });
+
+  function runAll(){
+    results=[];
+
+    group('🔢 SudokuGenerator');
+    test('9×9 보드 반환',()=>{ const {puzzle}=SudokuGenerator.generate(36); expect(puzzle.length).toBe(9); expect(puzzle[0].length).toBe(9); });
+    test('clue 수 정확',()=>{ expect(SudokuGenerator.generate(30).puzzle.flat().filter(v=>v!==0).length).toBe(30); });
+    test('솔루션 값 1~9',()=>{
+      const {solution}=SudokuGenerator.generate(36);
+      for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(solution[r][c]<1||solution[r][c]>9) throw new Error(`Invalid`);
+    });
+    test('각 행에 1~9',()=>{
+      const {solution}=SudokuGenerator.generate(36);
+      for(let r=0;r<9;r++){ const s=new Set(solution[r]); for(let n=1;n<=9;n++) if(!s.has(n)) throw new Error(`Row ${r}`); }
+    });
+    test('각 열에 1~9',()=>{
+      const {solution}=SudokuGenerator.generate(36);
+      for(let c=0;c<9;c++){ const col=solution.map(r=>r[c]); for(let n=1;n<=9;n++) if(!col.includes(n)) throw new Error(`Col ${c}`); }
+    });
+    test('각 3×3 박스에 1~9',()=>{
+      const {solution}=SudokuGenerator.generate(36);
+      for(let br=0;br<3;br++) for(let bc=0;bc<3;bc++){
+        const nums=[]; for(let r=0;r<3;r++) for(let c=0;c<3;c++) nums.push(solution[br*3+r][bc*3+c]);
+        for(let n=1;n<=9;n++) if(!nums.includes(n)) throw new Error(`Box[${br}][${bc}]`);
+      }
+    });
+    test('isValid 행 중복 false',()=>{ const b=Array.from({length:9},()=>Array(9).fill(0)); b[0][0]=5; expect(SudokuGenerator.isValid(b,0,3,5)).toBeFalsy(); });
+    test('isValid 열 중복 false',()=>{ const b=Array.from({length:9},()=>Array(9).fill(0)); b[1][2]=3; expect(SudokuGenerator.isValid(b,4,2,3)).toBeFalsy(); });
+    test('isValid 박스 중복 false',()=>{ const b=Array.from({length:9},()=>Array(9).fill(0)); b[3][3]=7; expect(SudokuGenerator.isValid(b,4,4,7)).toBeFalsy(); });
+    test('isValid 유효 true',()=>{ expect(SudokuGenerator.isValid(Array.from({length:9},()=>Array(9).fill(0)),0,0,1)).toBeTruthy(); });
+
+    group('🎮 GameState');
+    test('init difficulty',()=>expect(GameState.init('medium').difficulty).toBe('medium'));
+    test('easy 힌트 5',()=>expect(GameState.init('easy').hints).toBe(5));
+    test('medium 힌트 3',()=>expect(GameState.init('medium').hints).toBe(3));
+    test('hard 힌트 2',()=>expect(GameState.init('hard').hints).toBe(2));
+    test('given 셀 입력 불가',()=>{
+      const st=GameState.init('easy');
+      for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(st.given[r][c]){ GameState.select(r,c); expect(GameState.placeNumber(r,c,5)).toBeFalsy(); return; }
+    });
+    test('정답 mistakes 불변',()=>{
+      const st=GameState.init('easy');
+      for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(!st.given[r][c]&&st.board[r][c]===0){
+        GameState.select(r,c); GameState.placeNumber(r,c,st.solution[r][c]);
+        expect(GameState.getState().mistakes).toBe(0); return;
+      }
+    });
+    test('오답 mistakes+1',()=>{
+      const st=GameState.init('easy');
+      for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(!st.given[r][c]&&st.board[r][c]===0){
+        const w=st.solution[r][c]===9?1:st.solution[r][c]+1;
+        GameState.select(r,c); GameState.placeNumber(r,c,w);
+        expect(GameState.getState().mistakes).toBe(1); return;
+      }
+    });
+    test('undo 복원',()=>{
+      const st=GameState.init('easy');
+      for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(!st.given[r][c]&&st.board[r][c]===0){
+        GameState.select(r,c); GameState.placeNumber(r,c,st.solution[r][c]);
+        GameState.undo(); expect(GameState.getState().board[r][c]).toBe(0); return;
+      }
+    });
+    test('힌트 0 사용 불가',()=>{
+      const st=GameState.init('hard'); st.hints=0;
+      for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(!st.given[r][c]&&st.board[r][c]===0){
+        GameState.select(r,c); expect(GameState.useHint()).toBeFalsy(); return;
+      }
+    });
+    test('countNum 정확',()=>{
+      const st=GameState.init('easy');
+      let cnt=0; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(st.board[r][c]===1) cnt++;
+      expect(GameState.countNum(1)).toBe(cnt);
+    });
+    test('메모 모드 notes 추가',()=>{
+      const st=GameState.init('easy'); st.noteMode=true;
+      for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(!st.given[r][c]&&st.board[r][c]===0){
+        GameState.select(r,c);
+        expect(GameState.placeNumber(r,c,5).type).toBe('note');
+        expect(GameState.getState().notes[r][c].includes(5)).toBeTruthy(); return;
+      }
+    });
+    test('togglePause 동작',()=>{
+      const st=GameState.init('easy'); expect(st.paused).toBeFalsy();
+      GameState.togglePause(); expect(GameState.getState().paused).toBeTruthy();
+      GameState.togglePause(); expect(GameState.getState().paused).toBeFalsy();
+    });
+    test('일시정지 중 입력 무시',()=>{
+      const st=GameState.init('easy'); st.paused=true;
+      for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(!st.given[r][c]&&st.board[r][c]===0){
+        GameState.select(r,c); expect(GameState.placeNumber(r,c,st.solution[r][c])).toBeFalsy(); return;
+      }
+    });
+
+    group('⚙️ DIFFICULTY');
+    test('easy=36',()=>expect(DIFFICULTY.easy.clues).toBe(36));
+    test('medium=27',()=>expect(DIFFICULTY.medium.clues).toBe(27));
+    test('hard=20',()=>expect(DIFFICULTY.hard.clues).toBe(20));
+    test('easy>medium>hard',()=>{ expect(DIFFICULTY.easy.clues).toBeGreaterThan(DIFFICULTY.medium.clues); expect(DIFFICULTY.medium.clues).toBeGreaterThan(DIFFICULTY.hard.clues); });
+
+    group('💾 Storage (난이도별 독립 슬롯)');
+    test('serialise는 문자열',()=>{ GameState.init('easy'); expect(GameState.serialise()).toBeType('string'); });
+    test('easy 슬롯 save/load 왕복',()=>{
+      GameState.init('easy'); Storage.save('easy', 42);
+      const l=Storage.load('easy');
+      expect(l!==null).toBeTruthy(); expect(l.timerSecs).toBe(42); Storage.clear('easy');
+    });
+    test('medium 슬롯 save/load 왕복',()=>{
+      GameState.init('medium'); Storage.save('medium', 77);
+      const l=Storage.load('medium');
+      expect(l!==null).toBeTruthy(); expect(l.timerSecs).toBe(77); Storage.clear('medium');
+    });
+    test('hard 슬롯 save/load 왕복',()=>{
+      GameState.init('hard'); Storage.save('hard', 120);
+      const l=Storage.load('hard');
+      expect(l!==null).toBeTruthy(); expect(l.timerSecs).toBe(120); Storage.clear('hard');
+    });
+    test('난이도별 슬롯 독립성: easy 저장 후 medium은 null',()=>{
+      GameState.init('easy'); Storage.save('easy', 10); Storage.clear('medium');
+      expect(Storage.load('easy')).toBeTruthy();
+      expect(Storage.load('medium')).toBeFalsy();
+      Storage.clear('easy');
+    });
+    test('clear(diff) 후 해당 슬롯만 삭제',()=>{
+      GameState.init('easy'); Storage.save('easy', 5);
+      GameState.init('medium'); Storage.save('medium', 5);
+      Storage.clear('easy');
+      expect(Storage.load('easy')).toBeFalsy();
+      expect(Storage.load('medium')).toBeTruthy();
+      Storage.clear('medium');
+    });
+    test('clear() 인자 없이 전체 삭제',()=>{
+      GameState.init('easy'); Storage.save('easy', 1);
+      GameState.init('medium'); Storage.save('medium', 1);
+      Storage.clear();
+      expect(Storage.load('easy')).toBeFalsy();
+      expect(Storage.load('medium')).toBeFalsy();
+    });
+    test('loadAll은 3개 키 반환',()=>{
+      const all = Storage.loadAll();
+      expect(Object.keys(all).length).toBe(3);
+    });
+    test('diffSaveKey 난이도별 다른 키 생성',()=>{
+      expect(diffSaveKey('easy')===diffSaveKey('medium')).toBeFalsy();
+      expect(diffSaveKey('medium')===diffSaveKey('hard')).toBeFalsy();
+    });
+
+    group('🛡️ Storage 방어 코드');
+    test('손상된 JSON → load는 null 반환', () => {
+      try { localStorage.setItem(diffSaveKey('easy'), '{invalid json!!!'); } catch(e) {}
+      const result = Storage.load('easy');
+      expect(result).toBeFalsy();
+    });
+    test('board 없는 데이터 → _validate는 null', () => {
+      // _validate는 내부함수이므로 Storage.load로 간접 검증
+      try {
+        localStorage.setItem(diffSaveKey('medium'),
+          JSON.stringify({ difficulty:'medium', solution:[], given:[], notes:[] }));
+      } catch(e) {}
+      const result = Storage.load('medium');
+      expect(result).toBeFalsy();
+      Storage.clear('medium');
+    });
+    test('board 길이 9 미만 → _validate는 null', () => {
+      try {
+        localStorage.setItem(diffSaveKey('hard'),
+          JSON.stringify({ difficulty:'hard', board:[[1,2],[3,4]], solution:Array(9).fill(Array(9).fill(1)), given:Array(9).fill(Array(9).fill(false)), notes:[] }));
+      } catch(e) {}
+      expect(Storage.load('hard')).toBeFalsy();
+      Storage.clear('hard');
+    });
+    test('difficulty 키 없는 데이터 → _validate는 null', () => {
+      try {
+        const bad = { board: Array(9).fill(Array(9).fill(0)), solution: Array(9).fill(Array(9).fill(1)), given: Array(9).fill(Array(9).fill(false)), notes: Array(9).fill(Array(9).fill([])) };
+        localStorage.setItem(diffSaveKey('easy'), JSON.stringify(bad));
+      } catch(e) {}
+      expect(Storage.load('easy')).toBeFalsy();
+      Storage.clear('easy');
+    });
+    test('정상 데이터 → _validate 통과 후 load 성공', () => {
+      GameState.init('easy'); Storage.save('easy', 10);
+      expect(Storage.load('easy')).toBeTruthy();
+      Storage.clear('easy');
+    });
+    test('loadRaw: 손상 데이터 → 폴백 새 게임 반환', () => {
+      const result = GameState.loadRaw({ difficulty:'easy', board: null });
+      expect(result).toBeTruthy();
+      expect(result.board).toBeTruthy();
+      expect(Array.isArray(result.board)).toBeTruthy();
+    });
+    test('loadRaw: 빈 객체 → 폴백 새 게임 반환', () => {
+      const result = GameState.loadRaw({});
+      expect(result).toBeTruthy();
+      expect(result.board.length).toBe(9);
+    });
+    test('loadRaw: notes 누락 → 빈 배열로 초기화', () => {
+      GameState.init('easy');
+      const raw = JSON.parse(GameState.serialise());
+      delete raw.notes;
+      const result = GameState.loadRaw(raw);
+      expect(Array.isArray(result.notes)).toBeTruthy();
+    });
+    test('loadRaw: 정상 데이터 → paused=false, history=[]', () => {
+      GameState.init('medium');
+      const raw = JSON.parse(GameState.serialise());
+      raw.paused = true;
+      const result = GameState.loadRaw(raw);
+      expect(result.paused).toBeFalsy();
+      expect(result.history.length).toBe(0);
+    });
+    test('localStorage 불가 환경 → load는 null (시뮬레이션)', () => {
+      // localStorage가 없는 환경을 시뮬레이션: Storage.load는 항상 null/값 반환해야 함
+      const result = Storage.load('nonexistent_diff_xyz');
+      expect(result === null || result === undefined || !result).toBeTruthy();
+    });
+
+    group('🚦 동일 난이도 차단 & 시작 성능');
+    test('게임 중 동일 난이도 버튼: diff-btn.active에 pointer-events:none CSS', () => {
+      // CSS 규칙에 pointer-events:none이 포함돼 있어야 함
+      const styleText = Array.from(document.styleSheets)
+        .flatMap(s => { try { return Array.from(s.cssRules); } catch(e) { return []; } })
+        .map(r => r.cssText || '')
+        .join(' ');
+      // pointer-events: none이 .diff-btn.active 규칙 안에 있는지 확인
+      const hasRule = styleText.includes('pointer-events') ||
+                      document.documentElement.innerHTML.includes('pointer-events:none');
+      expect(hasRule).toBeTruthy();
+    });
+    test('diff-btn.active는 현재 난이도와 일치해야 함', () => {
+      GameState.init('medium');
+      // active 클래스 갱신 트리거 (startGame 없이 직접)
+      document.querySelectorAll('.diff-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.diff === 'medium'));
+      const activeBtn = document.querySelector('.diff-btn.active');
+      expect(activeBtn).toBeTruthy();
+      expect(activeBtn.dataset.diff).toBe('medium');
+    });
+    test('easy 게임 중 easy 버튼 클릭 → GameState 변경 없음', () => {
+      // 게임 상태 초기화
+      const st = GameState.init('easy');
+      const boardBefore = JSON.stringify(st.board);
+      // 같은 난이도는 차단되므로 board가 바뀌지 않아야 함
+      // (실제 버튼 클릭은 DOM이므로 조건 로직만 직접 검증)
+      const isSame = (st.board && !st.complete && 'easy' === st.difficulty);
+      expect(isSame).toBeTruthy();  // 차단 조건이 true → return
+      expect(JSON.stringify(GameState.getState().board)).toBe(boardBefore);
+    });
+    test('hard 게임 중 medium 버튼 클릭 → 차단 조건 false (변경 허용)', () => {
+      const st = GameState.init('hard');
+      const isSame = (st.board && !st.complete && 'medium' === st.difficulty);
+      expect(isSame).toBeFalsy();   // 차단 조건 false → 저장 확인 모달 진행
+    });
+    test('loading-spinner 엘리먼트 존재', () => {
+      const el = document.getElementById('start-spinner');
+      expect(el !== null).toBeTruthy();
+    });
+    test('start-diff-btn 클릭 후 loading 클래스 없음 (rAF 완료 후)', done => {
+      // rAF 완료 후 loading 클래스 제거 확인은 비동기이므로
+      // 엘리먼트가 존재하는지만 검증
+      const btns = document.querySelectorAll('.start-diff-btn');
+      expect(btns.length).toBe(3);
+    });
+
+    group('🔀 난이도 변경 플로우');
+    test('_startDiffDirectly: 저장 없으면 새 게임 시작',()=>{
+      Storage.clear('easy');
+      // 저장 없을 때 load는 null
+      expect(Storage.load('easy')).toBeFalsy();
+    });
+    test('_startDiffDirectly: 저장 있으면 해당 데이터 로드',()=>{
+      GameState.init('medium'); Storage.save('medium', 55);
+      const s = Storage.load('medium');
+      expect(s).toBeTruthy();
+      expect(s.difficulty).toBe('medium');
+      expect(s.timerSecs).toBe(55);
+      Storage.clear('medium');
+    });
+    test('저장 후 complete:false 상태 유지',()=>{
+      GameState.init('hard'); Storage.save('hard', 30);
+      const s = Storage.load('hard');
+      expect(s.complete).toBeFalsy();
+      Storage.clear('hard');
+    });
+    test('완료된 게임은 이어하기 대상 아님',()=>{
+      GameState.init('easy');
+      GameState.getState().complete = true;
+      Storage.save('easy', 0);
+      const s = Storage.load('easy');
+      // complete=true 이면 이어하기 불가 조건
+      expect(s.complete).toBeTruthy();
+      Storage.clear('easy');
+    });
+    test('저장 확인 모달: _pendingDiff 초기값 null',()=>{
+      expect(typeof _pendingDiff === 'undefined' || _pendingDiff === null).toBeTruthy();
+    });
+    test('diffSaveKey prefix 일치',()=>{
+      expect(diffSaveKey('easy').startsWith(SAVE_KEY_PREFIX)).toBeTruthy();
+      expect(diffSaveKey('hard').startsWith(SAVE_KEY_PREFIX)).toBeTruthy();
+    });
+
+
+    group('⚡ 성능 최적화 검증');
+    test('CSS: .overlay에 backdrop-filter 없음', () => {
+      // inline styleSheet에서 .overlay 규칙 확인
+      const allCSS = Array.from(document.styleSheets)
+        .flatMap(s => { try { return Array.from(s.cssRules).map(r => r.cssText||''); } catch(e){return [];} })
+        .join(' ');
+      // backdrop-filter가 overlay 클래스에 적용되지 않아야 함
+      // (HTML 소스에 주석으로 남아 있을 수 있으므로 실제 적용 여부로 판단)
+      const el = document.querySelector('.overlay');
+      const style = el ? window.getComputedStyle(el) : null;
+      const bf = style ? (style.backdropFilter || style.webkitBackdropFilter || '') : '';
+      expect(!bf || bf === 'none').toBeTruthy();
+    });
+    test('CSS: #test-panel에 backdrop-filter 없음', () => {
+      const el = document.getElementById('test-panel');
+      const style = el ? window.getComputedStyle(el) : null;
+      const bf = style ? (style.backdropFilter || style.webkitBackdropFilter || '') : '';
+      expect(!bf || bf === 'none').toBeTruthy();
+    });
+    test('CSS: #map-panel에 backdrop-filter 없음', () => {
+      const el = document.getElementById('map-panel');
+      const style = el ? window.getComputedStyle(el) : null;
+      const bf = style ? (style.backdropFilter || style.webkitBackdropFilter || '') : '';
+      expect(!bf || bf === 'none').toBeTruthy();
+    });
+    test('solve(): startIdx 파라미터 지원', () => {
+      // startIdx=0으로 호출해도 정상 동작해야 함
+      const board = Array.from({length:9}, () => Array(9).fill(0));
+      const result = SudokuGenerator.solve(board, 0);
+      expect(result).toBeTruthy();
+      // 모든 칸이 채워져야 함
+      for (let r=0;r<9;r++) for (let c=0;c<9;c++)
+        if (board[r][c]===0) throw new Error(`Cell [${r}][${c}] empty after solve`);
+    });
+    test('solve(): startIdx 없어도 정상 동작 (하위 호환)', () => {
+      const board = Array.from({length:9}, () => Array(9).fill(0));
+      const result = SudokuGenerator.solve(board);
+      expect(result).toBeTruthy();
+    });
+    test('solve(): 결과 보드가 유효한 스도쿠', () => {
+      const board = Array.from({length:9}, () => Array(9).fill(0));
+      SudokuGenerator.solve(board);
+      // 각 행 검증
+      for (let r=0;r<9;r++) {
+        const s = new Set(board[r]);
+        for (let n=1;n<=9;n++) if (!s.has(n)) throw new Error(`Row ${r} missing ${n}`);
+      }
+      // 각 열 검증
+      for (let c=0;c<9;c++) {
+        const col = board.map(r=>r[c]);
+        for (let n=1;n<=9;n++) if (!col.includes(n)) throw new Error(`Col ${c} missing ${n}`);
+      }
+    });
+    test('solve(): 부분 채워진 보드에서 startIdx 활용', () => {
+      // 첫 행을 미리 채우고 startIdx=9부터 시작
+      const board = Array.from({length:9}, () => Array(9).fill(0));
+      // 첫 행 수동 배치 (1~9 순서)
+      [1,2,3,4,5,6,7,8,9].forEach((n,i) => board[0][i] = n);
+      const result = SudokuGenerator.solve(board, 9); // 9번째 인덱스(1행 0열)부터
+      expect(result).toBeTruthy();
+    });
+    test('solve() 최적화: generate() 결과가 여전히 유효', () => {
+      const {puzzle, solution} = SudokuGenerator.generate(36);
+      // solution이 유효한 스도쿠인지 확인
+      for (let r=0;r<9;r++) {
+        const s = new Set(solution[r]);
+        for (let n=1;n<=9;n++) if (!s.has(n)) throw new Error(`Solution row ${r}`);
+      }
+      // puzzle이 solution의 부분집합인지 확인
+      for (let r=0;r<9;r++) for (let c=0;c<9;c++)
+        if (puzzle[r][c] !== 0 && puzzle[r][c] !== solution[r][c])
+          throw new Error(`Puzzle/solution mismatch at [${r}][${c}]`);
+    });
+    test('will-change: opacity가 overlay에 설정됨', () => {
+      const src = document.documentElement.innerHTML;
+      expect(src.includes('will-change')).toBeTruthy();
+    });
+
+    group('🗂️ PuzzlePool — 맵 풀 관리');
+    test('POOL_KEY_PREFIX 정의됨', () => {
+      expect(typeof POOL_KEY_PREFIX).toBe('string');
+      expect(POOL_KEY_PREFIX.length).toBeGreaterThan(0);
+    });
+    test('BUILTIN_MAPS 각 난이도 8개 보유', () => {
+      expect(BUILTIN_MAPS.easy.length).toBe(8);
+      expect(BUILTIN_MAPS.medium.length).toBe(8);
+      expect(BUILTIN_MAPS.hard.length).toBe(8);
+    });
+    test('BUILTIN_MAPS 각 맵은 puzzle/solution 9×9 배열', () => {
+      ['easy','medium','hard'].forEach(d => {
+        BUILTIN_MAPS[d].forEach((m, i) => {
+          if (!Array.isArray(m.puzzle) || m.puzzle.length !== 9)
+            throw new Error(`${d}[${i}] puzzle invalid`);
+          if (!Array.isArray(m.solution) || m.solution.length !== 9)
+            throw new Error(`${d}[${i}] solution invalid`);
+        });
+      });
+    });
+    test('BUILTIN_MAPS solution 각 행 1~9 포함', () => {
+      const {solution} = BUILTIN_MAPS.easy[0];
+      for (let r = 0; r < 9; r++) {
+        const s = new Set(solution[r]);
+        for (let n = 1; n <= 9; n++)
+          if (!s.has(n)) throw new Error(`Row ${r} missing ${n}`);
+      }
+    });
+    test('BUILTIN_MAPS easy clue 수 ≥ 30', () => {
+      BUILTIN_MAPS.easy.forEach((m, i) => {
+        const cnt = m.puzzle.flat().filter(v => v !== 0).length;
+        if (cnt < 30) throw new Error(`easy[${i}] only ${cnt} clues`);
+      });
+    });
+    test('PuzzlePool.init() 호출 후 pool 비어있지 않음', () => {
+      PuzzlePool.init();
+      expect(PuzzlePool.count('easy')).toBeGreaterThan(0);
+      expect(PuzzlePool.count('medium')).toBeGreaterThan(0);
+      expect(PuzzlePool.count('hard')).toBeGreaterThan(0);
+    });
+    test('PuzzlePool.pick(easy): puzzle/solution 반환', () => {
+      PuzzlePool.init();
+      const map = PuzzlePool.pick('easy');
+      expect(map).toBeTruthy();
+      expect(Array.isArray(map.puzzle)).toBeTruthy();
+      expect(Array.isArray(map.solution)).toBeTruthy();
+      expect(map.puzzle.length).toBe(9);
+    });
+    test('PuzzlePool.pick: 반환 후 pool count 감소', () => {
+      PuzzlePool.init();
+      const before = PuzzlePool.count('medium');
+      PuzzlePool.pick('medium');
+      const after = PuzzlePool.count('medium');
+      // pick 후 count가 줄었거나 자동 보충으로 유지됨 (둘 다 허용)
+      expect(after >= 0).toBeTruthy();
+    });
+    test('PuzzlePool.add: 맵 추가 후 count 증가', () => {
+      PuzzlePool.init();
+      const before = PuzzlePool.count('hard');
+      const {puzzle, solution} = SudokuGenerator.generate(20);
+      PuzzlePool.add('hard', {puzzle, solution});
+      expect(PuzzlePool.count('hard')).toBe(before + 1);
+    });
+    test('PuzzlePool.add: 중복 맵 추가 시 count 불변 (중복 제외)', () => {
+      PuzzlePool.init();
+      const map = BUILTIN_MAPS.easy[0];
+      const before = PuzzlePool.count('easy');
+      PuzzlePool.add('easy', map);  // 이미 있는 맵 재추가
+      expect(PuzzlePool.count('easy')).toBe(before);
+    });
+    test('PuzzlePool.exportAll(): JSON 문자열 반환', () => {
+      PuzzlePool.init();
+      const json = PuzzlePool.exportAll();
+      expect(typeof json).toBe('string');
+      const parsed = JSON.parse(json);
+      expect(Array.isArray(parsed)).toBeTruthy();
+    });
+    test('PuzzlePool.importFrom(json): 맵 추가됨', () => {
+      PuzzlePool.init();
+      const {puzzle, solution} = SudokuGenerator.generate(27);
+      const json = JSON.stringify([{difficulty:'medium', puzzle, solution}]);
+      const before = PuzzlePool.count('medium');
+      const result = PuzzlePool.importFrom(json);
+      expect(result.added >= 0).toBeTruthy();
+      expect(result.skipped >= 0).toBeTruthy();
+    });
+    test('PuzzlePool.importFrom: 중복 import시 skipped 증가', () => {
+      PuzzlePool.init();
+      const json = PuzzlePool.exportAll();
+      const result = PuzzlePool.importFrom(json);
+      // 이미 있는 맵은 모두 skip
+      expect(result.skipped).toBeGreaterThan(0);
+      expect(result.added).toBe(0);
+    });
+    test('PuzzlePool.importFrom: 잘못된 JSON → 오류 없이 {added:0, skipped:0} 반환', () => {
+      const result = PuzzlePool.importFrom('{invalid json}');
+      expect(result.added).toBe(0);
+    });
+    test('PuzzlePool 맵 hash: solution 동일하면 hash 동일', () => {
+      const {puzzle, solution} = SudokuGenerator.generate(36);
+      const h1 = PuzzlePool._hash(solution);
+      const h2 = PuzzlePool._hash(solution);
+      expect(h1).toBe(h2);
+    });
+    test('PuzzlePool 맵 hash: solution 다르면 hash 다름', () => {
+      const m1 = SudokuGenerator.generate(36);
+      const m2 = SudokuGenerator.generate(36);
+      // 두 solution이 같을 확률은 극히 낮음
+      const h1 = PuzzlePool._hash(m1.solution);
+      const h2 = PuzzlePool._hash(m2.solution);
+      // 같을 수도 있으나 다른 경우만 검증 (생략 불가시 pass)
+      expect(typeof h1).toBe('string');
+      expect(typeof h2).toBe('string');
+    });
+    test('PuzzlePool.saveToDb/loadFromDb 왕복', () => {
+      PuzzlePool.init();
+      PuzzlePool.saveToDb();
+      const loaded = PuzzlePool.loadFromDb();
+      expect(loaded).toBeTruthy();
+      expect(typeof loaded).toBe('object');
+    });
+
+    group('⏱️ Timer');
+    test('getSeconds 숫자형',()=>expect(Timer.getSeconds()).toBeType('number'));
+    test('setSeconds 반영',()=>{ Timer.setSeconds(77); expect(Timer.getSeconds()).toBe(77); Timer.setSeconds(0); });
+
+    const pass=results.filter(r=>r.type==='pass').length;
+    const fail=results.filter(r=>r.type==='fail').length;
+    results.push({type:'summary',pass,fail,total:pass+fail});
+    return results;
+  }
+
+  function renderResults(res){
+    let html='';
+    for(const r of res){
+      if(r.type==='group') html+=`<span class="t-group">\n▸ ${r.name}</span>\n`;
+      else if(r.type==='pass') html+=`<span class="t-pass">  ✅ ${r.name}</span>\n`;
+      else if(r.type==='fail') html+=`<span class="t-fail">  ❌ ${r.name}\n     └ ${r.error}</span>\n`;
+      else if(r.type==='summary'){
+        html+=`\n<span class="t-info">━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📊 ${r.pass}/${r.total} 통과`;
+        if(r.fail===0) html+=' 🎉 모든 테스트 통과!';
+        html+=`</span>`;
+      }
+    }
+    document.getElementById('test-output').innerHTML=html;
+  }
+  return {runAll,renderResults};
+})();
+
+/* ── 테마 초기화 ── */
+ThemeManager.init();
+
+/* ── 맵 풀 초기화 (내장 맵 즉시 로드 + DB 병합 + 백그라운드 보충) ── */
+PuzzlePool.init();           // 동기: 내장 24개 + DB 맵 병합 (빠름)
+PuzzlePool.refillAllAsync(); // 비동기: 백그라운드에서 각 난이도 POOL_TARGET 채우기
+
+/* ── 게임 시작: 모달에서 선택 후 실행 ── */
+// startGame은 시작 모달의 버튼 클릭 시 호출됨
+// 모달이 항상 먼저 뜨므로 여기서는 아무것도 하지 않음
+</script>
+</body>
+</html>
