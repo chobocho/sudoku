@@ -940,37 +940,48 @@ const GameState = (() => {
 
   function placeNumber(r,c,num) {
     if (state.given[r][c]||state.complete||state.paused) return false;
-    state.history.push({r,c,prevVal:state.board[r][c],prevNotes:[...state.notes[r][c]]});
-    if (state.noteMode && num!==0) {
+    const isNote=state.noteMode && num!==0;
+    // 바뀌는 것이 없는 입력(같은 숫자 재입력, 빈 칸 지우기)은 되돌리기 기록에 남기지 않음
+    if (!isNote && state.board[r][c]===num) return false;
+    const entry={r,c,prevVal:state.board[r][c],prevNotes:[...state.notes[r][c]],peerNotes:[]};
+    state.history.push(entry);
+    if (isNote) {
       const idx=state.notes[r][c].indexOf(num);
       if (idx>=0) state.notes[r][c].splice(idx,1);
       else state.notes[r][c].push(num);
       return {type:'note',r,c};
     }
-    if (num!==0 && state.board[r][c]===num) return false;
     state.board[r][c]=num;
-    if (num!==0) { state.notes[r][c]=[]; clearRelatedNotes(r,c,num); }
+    if (num!==0) { state.notes[r][c]=[]; entry.peerNotes=clearRelatedNotes(r,c,num); }
     const correct=num===0||state.solution[r][c]===num;
     if (num!==0&&!correct) state.mistakes++;
     const isComplete=checkComplete();
     return {type:'place',r,c,num,correct,isComplete};
   }
 
+  // 같은 행/열/박스 메모에서 num 을 지우고, 실제로 바뀐 칸의 이전 메모 목록을 반환 (undo 복원용).
+  // 칸 20개 × 메모 최대 9개 → O(1). 바뀐 칸만 담으므로 기록 1건당 메모리도 작음
   function clearRelatedNotes(r,c,num) {
-    for (let i=0;i<9;i++) {
-      state.notes[r][i]=state.notes[r][i].filter(n=>n!==num);
-      state.notes[i][c]=state.notes[i][c].filter(n=>n!==num);
-    }
+    const changed=[];
+    const strip=(rr,cc)=>{
+      const cur=state.notes[rr][cc];
+      if (!cur.includes(num)) return;
+      changed.push({r:rr,c:cc,notes:[...cur]});
+      state.notes[rr][cc]=cur.filter(n=>n!==num);
+    };
+    for (let i=0;i<9;i++) { strip(r,i); strip(i,c); }
     const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
-    for (let dr=0;dr<3;dr++) for (let dc=0;dc<3;dc++)
-      state.notes[br+dr][bc+dc]=state.notes[br+dr][bc+dc].filter(n=>n!==num);
+    for (let dr=0;dr<3;dr++) for (let dc=0;dc<3;dc++) strip(br+dr,bc+dc);
+    return changed;
   }
 
+  // 일시정지·완료 상태에서는 보드를 바꾸지 않음. 실수 횟수는 되돌리지 않음(기록 유지 정책)
   function undo() {
-    if (!state.history.length) return null;
+    if (state.paused||state.complete||!state.history.length) return null;
     const last=state.history.pop();
     state.board[last.r][last.c]=last.prevVal;
     state.notes[last.r][last.c]=[...last.prevNotes];
+    (last.peerNotes||[]).forEach(p=>{ state.notes[p.r][p.c]=[...p.notes]; });
     return last;
   }
 
@@ -978,7 +989,9 @@ const GameState = (() => {
     if (state.hints<=0||!state.selected||state.complete||state.paused) return null;
     const {r,c}=state.selected;
     if (state.given[r][c]||state.board[r][c]===state.solution[r][c]) return null;
-    state.history.push({r,c,prevVal:state.board[r][c],prevNotes:[...state.notes[r][c]]});
+    // 힌트 칸은 되돌리기 불가: 기록을 남기지 않고, 이 칸의 이전 기록도 제거해
+    // 앞선 기록을 undo 해도 힌트 값이 덮어써지지 않게 함 (힌트 반복 사용 방지)
+    state.history=state.history.filter(h=>!(h.r===r&&h.c===c));
     state.board[r][c]=state.solution[r][c];
     state.notes[r][c]=[];
     clearRelatedNotes(r,c,state.solution[r][c]);
@@ -1866,6 +1879,84 @@ const TestRunner = (() => {
       for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(!st.given[r][c]&&st.board[r][c]===0){
         GameState.select(r,c); expect(GameState.placeNumber(r,c,st.solution[r][c])).toBeFalsy(); return;
       }
+    });
+
+    group('↩️ 되돌리기');
+    // 비어 있는(given 아님, 값 0) 칸 목록
+    const emptyCells=st=>{
+      const out=[];
+      for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(!st.given[r][c]&&st.board[r][c]===0) out.push([r,c]);
+      return out;
+    };
+    test('숫자 입력으로 지워진 주변 칸 메모를 undo가 복원',()=>{
+      const st=GameState.init('easy');
+      const cells=emptyCells(st);
+      // 같은 행의 빈 칸 두 개: A에 정답을 넣으면 B의 같은 숫자 메모가 지워짐
+      const [r,c]=cells.find(([r1,c1])=>cells.some(([r2,c2])=>r2===r1&&c2!==c1));
+      const [,c2]=cells.find(([r2,cc])=>r2===r&&cc!==c);
+      const n=st.solution[r][c];
+      st.noteMode=true; GameState.placeNumber(r,c2,n); st.noteMode=false;
+      GameState.placeNumber(r,c,n);
+      expect(st.notes[r][c2].includes(n)).toBeFalsy();
+      GameState.undo();
+      expect(GameState.getState().notes[r][c2].includes(n)).toBeTruthy();
+      expect(GameState.getState().board[r][c]).toBe(0);
+    });
+    test('일시정지 중 undo 무시',()=>{
+      const st=GameState.init('easy');
+      const [r,c]=emptyCells(st)[0];
+      GameState.placeNumber(r,c,st.solution[r][c]);
+      st.paused=true;
+      expect(GameState.undo()).toBeFalsy();
+      expect(st.board[r][c]).toBe(st.solution[r][c]);
+    });
+    test('완료 후 undo 무시',()=>{
+      const st=GameState.init('easy');
+      const [r,c]=emptyCells(st)[0];
+      GameState.placeNumber(r,c,st.solution[r][c]);
+      st.complete=true;
+      expect(GameState.undo()).toBeFalsy();
+      expect(st.board[r][c]).toBe(st.solution[r][c]);
+    });
+    test('오답 undo 후에도 실수 횟수 유지',()=>{
+      const st=GameState.init('easy');
+      const [r,c]=emptyCells(st)[0];
+      GameState.placeNumber(r,c,st.solution[r][c]%9+1);
+      GameState.undo();
+      expect(st.board[r][c]).toBe(0);
+      expect(st.mistakes).toBe(1);
+    });
+    test('힌트 칸은 undo 불가 (이전 오답 기록 포함)',()=>{
+      const st=GameState.init('easy');
+      const [r,c]=emptyCells(st)[0];
+      GameState.placeNumber(r,c,st.solution[r][c]%9+1);   // 오답 입력 후
+      GameState.select(r,c); GameState.useHint();          // 같은 칸에 힌트
+      const hintsLeft=st.hints;
+      expect(GameState.undo()).toBeFalsy();
+      expect(st.board[r][c]).toBe(st.solution[r][c]);
+      expect(st.hints).toBe(hintsLeft);
+    });
+    test('힌트 뒤에도 다른 칸 입력은 undo 가능',()=>{
+      const st=GameState.init('easy');
+      const [[r1,c1],[r2,c2]]=emptyCells(st);
+      GameState.placeNumber(r1,c1,st.solution[r1][c1]);
+      GameState.select(r2,c2); GameState.useHint();
+      expect(GameState.undo()).toBeTruthy();
+      expect(st.board[r1][c1]).toBe(0);
+      expect(st.board[r2][c2]).toBe(st.solution[r2][c2]);
+    });
+    test('같은 숫자 재입력은 기록되지 않음',()=>{
+      const st=GameState.init('easy');
+      const [r,c]=emptyCells(st)[0];
+      GameState.placeNumber(r,c,st.solution[r][c]);
+      GameState.placeNumber(r,c,st.solution[r][c]);
+      expect(st.history.length).toBe(1);
+    });
+    test('빈 칸 지우기는 기록되지 않음',()=>{
+      const st=GameState.init('easy');
+      const [r,c]=emptyCells(st)[0];
+      GameState.placeNumber(r,c,0);
+      expect(st.history.length).toBe(0);
     });
 
     group('⚙️ DIFFICULTY');
