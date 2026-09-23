@@ -435,6 +435,54 @@ itest('[다] 시작 모달·저장 확인 모달이 열려 있으면 숫자·지
   assertEq(cellValue(g, cell), 7, 'erase ignored under start modal');
 });
 
+const secs = g => g.run(`Timer.getSeconds()`);
+const isShown = (g, id) => g.document.getElementById(id).classList.contains('show');
+const closeBtnVisible = g => {
+  const el = g.document.getElementById('start-close');
+  if (!el) throw new Error('start-close button missing');
+  return el.style.display !== 'none';
+};
+
+itest('[나] 진행 중 게임에서 새 게임 모달: 타이머 정지, 닫기 버튼으로 게임·타이머 재개', () => {
+  const g = loadGame();
+  startViaModalAndSelect(g);
+  g.clock.advance(5000);
+  const game = g.run(`GameState.getState()`);
+  g.document.getElementById('btn-new').click();
+  g.clock.advance(10000);
+  assertEq(secs(g), 5, 'timer paused while modal open');
+  assertEq(closeBtnVisible(g), true, 'close button visible');
+  g.document.getElementById('start-close').click();
+  assertEq(isShown(g, 'start-overlay'), false, 'modal closed');
+  assertEq(g.run(`GameState.getState()`) === game, true, 'same game continues');
+  g.clock.advance(3000);
+  assertEq(secs(g), 8, 'timer resumed');
+});
+
+itest('[나] 사용자가 일시정지한 게임은 모달을 닫아도 일시정지 유지', () => {
+  const g = loadGame();
+  startViaModalAndSelect(g);
+  g.clock.advance(2000);
+  g.document.getElementById('btn-pause').click();
+  g.document.getElementById('btn-new').click();
+  g.document.getElementById('start-close').click();
+  g.clock.advance(5000);
+  assertEq(secs(g), 2, 'timer still paused');
+  assertEq(g.run(`GameState.getState().paused`), true, 'still paused');
+});
+
+itest('[나] 첫 실행·게임 완료 후에는 닫기 버튼 숨김', () => {
+  const g = loadGame();
+  g.clock.flush();
+  assertEq(closeBtnVisible(g), false, 'hidden on first launch');
+  startViaModalAndSelect(g);
+  solveCurrentGame(g);
+  g.clock.flush();
+  g.document.getElementById('btn-play-again').click();
+  assertEq(isShown(g, 'start-overlay'), true, 'start modal shown');
+  assertEq(closeBtnVisible(g), false, 'hidden after completion');
+});
+
 /* ── 인게임 TestRunner 실행 ───────────────────────────── */
 const g = loadGame();
 g.clock.flush();
