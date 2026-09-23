@@ -166,6 +166,7 @@ function loadGame() {
   };
   const clock = makeClock();
   const localStorage = makeLocalStorage();
+  const winListeners = {};   // window 전역 이벤트(error 등)를 테스트에서 직접 발생시키기 위해 기록
   const ctx = {
     document, localStorage, console,
     setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout,
@@ -175,7 +176,7 @@ function loadGame() {
     matchMedia: () => ({ matches: false }),
     getComputedStyle: () => ({}),
     location: { reloaded: false, reload() { this.reloaded = true; } },
-    addEventListener() {},
+    addEventListener: (t, fn) => { (winListeners[t] ||= []).push(fn); },
   };
   ctx.window = ctx;
   vm.createContext(ctx);
@@ -186,7 +187,8 @@ function loadGame() {
   const run = vm.runInContext(
     `(function(${BUILTINS}){${script}\n;return code => eval(code);})(${BUILTINS})`,
     ctx, { filename: 'sudoku.html<script>' });
-  return { ctx, run, clock, localStorage, document };
+  const fireWindow = (type, ev = {}) => (winListeners[type] || []).forEach(fn => fn(ev));
+  return { ctx, run, clock, localStorage, document, fireWindow };
 }
 
 /* ── 통합 테스트 ──────────────────────────────────────── */
@@ -272,6 +274,47 @@ itest('[3] TDD 패널(runAll) 실행 전후 진행 중 게임·저장·풀·타�
   // 타이머가 여전히 이 게임을 계속 셈
   g.clock.advance(3000);
   assertEq(g.run(`Timer.getSeconds()`), before.timer + 3, 'timer keeps running');
+});
+
+/* 세 난이도 슬롯에 정상 저장을 만들어 둠 */
+function seedAllSaves(g) {
+  g.run(`['easy','medium','hard'].forEach((d, i) => { GameState.init(d); Storage.save(d, 10 + i); })`);
+}
+const savedDiffs = g => g.run(`Object.keys(DIFFICULTY).filter(d => Storage.load(d) !== null)`);
+
+itest('[4] startGame 복구 시 실패한 난이도 슬롯만 삭제, 다른 저장은 유지', () => {
+  const g = loadGame();
+  g.clock.flush();
+  seedAllSaves(g);
+  // given 이 빈 배열인 손상 데이터 → 렌더링 중 예외 → 복구 경로 진입
+  g.run(`(() => {
+    const raw = Storage.load('medium');
+    raw.given = [];
+    GameController.startGame(null, raw);
+  })()`);
+  assertEq(savedDiffs(g), ['easy', 'hard'], 'remaining saves');
+  assertEq(g.run(`GameState.getState().board.length`), 9, 'recovered game board');
+});
+
+itest('[4] 시작 모달 오류 시 저장을 지우지 않음', () => {
+  const g = loadGame();
+  g.clock.flush();
+  seedAllSaves(g);
+  g.run(`Storage.loadAll = () => { throw new Error('boom'); }`);
+  g.run(`_openStartModalForDiff(null)`);
+  assertEq(savedDiffs(g), ['easy', 'medium', 'hard'], 'remaining saves');
+  if (!g.document.getElementById('start-overlay').classList.contains('show')) throw new Error('start modal not shown');
+});
+
+itest('[4] 전역 error 이벤트가 저장을 지우지 않고 시작 모달만 복구', () => {
+  const g = loadGame();
+  g.clock.flush();
+  seedAllSaves(g);
+  const overlay = g.document.getElementById('start-overlay');
+  overlay.classList.remove('show');                 // 게임 시작 전 오버레이가 닫힌 상태
+  g.fireWindow('error', { message: 'unrelated' });
+  assertEq(savedDiffs(g), ['easy', 'medium', 'hard'], 'remaining saves');
+  if (!overlay.classList.contains('show')) throw new Error('start modal not restored');
 });
 
 /* ── 인게임 TestRunner 실행 ───────────────────────────── */

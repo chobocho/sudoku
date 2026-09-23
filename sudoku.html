@@ -1152,17 +1152,28 @@ const Storage = (() => {
     try { localStorage.removeItem(key); } catch(e) {}
   }
 
-  /* 저장 데이터 스키마 검증 — 필수 필드 없으면 null 반환 */
+  /* 9×9 배열이고 모든 칸이 okCell 을 만족하는지 */
+  function _isGrid(g, okCell) {
+    return Array.isArray(g) && g.length === 9 &&
+      g.every(r => Array.isArray(r) && r.length === 9 && r.every(okCell));
+  }
+  const _isInt = (v, min, max) => Number.isInteger(v) && v >= min && v <= max;
+  const _isCount = v => Number.isInteger(v) && v >= 0;
+
+  /* 저장 데이터 스키마 검증 — 필수 필드 없거나 모양·값 범위가 틀리면 null 반환.
+     렌더링 중 예외가 나기 전에 손상 데이터를 걸러 복구 경로(슬롯 삭제)로 가지 않게 함 */
   function _validate(raw) {
     if (!raw || typeof raw !== 'object')           return null;
-    if (!Array.isArray(raw.board))                 return null;
-    if (raw.board.length !== 9)                    return null;
-    if (!raw.board.every(r => Array.isArray(r) && r.length === 9)) return null;
-    if (!Array.isArray(raw.solution))              return null;
-    if (raw.solution.length !== 9)                 return null;
-    if (!Array.isArray(raw.given))                 return null;
-    if (!Array.isArray(raw.notes))                 return null;
     if (!DIFFICULTY[raw.difficulty])               return null;
+    if (!_isGrid(raw.board,    v => _isInt(v, 0, 9)))   return null;
+    if (!_isGrid(raw.solution, v => _isInt(v, 1, 9)))   return null;
+    if (!_isGrid(raw.given,    v => typeof v === 'boolean')) return null;
+    if (!_isGrid(raw.notes,    n => Array.isArray(n) && n.every(x => _isInt(x, 1, 9)))) return null;
+    if (!_isCount(raw.mistakes) || !_isCount(raw.hints)) return null;
+    if (raw.timerSecs !== undefined && !_isCount(raw.timerSecs)) return null;
+    // 주어진 칸은 반드시 정답 값이어야 함 (given/board/solution 불일치 = 손상)
+    for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++)
+      if (raw.given[r][c] && raw.board[r][c] !== raw.solution[r][c]) return null;
     return raw;  // 검증 통과
   }
 
@@ -1240,7 +1251,9 @@ const GameController = (() => {
     } catch(e) {
       // 최후 방어선: 모든 예외를 잡아서 새 easy 게임으로 복구
       console.error('[Sudoku] startGame failed, recovering:', e);
-      Storage.clear();          // 손상 가능 데이터 전체 제거
+      // 실패한 난이도 슬롯만 제거 — 다른 난이도의 정상 저장까지 지우지 않음
+      const failedDiff = savedData ? savedData.difficulty : diff;
+      if (DIFFICULTY[failedDiff]) Storage.clear(failedDiff);
       try {
         Timer.stop();
         const state = GameState.init('easy');
@@ -1615,9 +1628,9 @@ function _openStartModalForDiff(targetDiff) {
     document.getElementById('start-overlay').classList.add('show');
 
   } catch(e) {
-    // 모달 자체가 실패하면 — 안전망: 손상 데이터 제거 후 빈 시작 모달 표시
+    // 모달 자체가 실패하면 — 안전망: 빈 시작 모달 표시.
+    // 손상 슬롯은 Storage.load 검증이 슬롯 단위로 걸러내므로 여기서 저장을 지우지 않음
     console.warn('[Sudoku] _openStartModalForDiff failed, showing clean modal:', e);
-    Storage.clear();
     try {
       document.getElementById('resume-section').style.display = 'none';
       document.getElementById('start-sub').textContent = '난이도를 선택해 주세요';
@@ -1660,8 +1673,8 @@ window.addEventListener('error', (e) => {
   // 시작 오버레이가 닫혀 있고 게임도 없으면 → 시작 모달 복구
   const overlay = document.getElementById('start-overlay');
   const boardHasContent = document.querySelector('#board .cell');
+  // 게임과 무관한 오류일 수 있으므로 저장은 지우지 않고 시작 모달만 복구
   if (overlay && !overlay.classList.contains('show') && !boardHasContent) {
-    Storage.clear();
     try {
       document.getElementById('resume-section').style.display = 'none';
       document.getElementById('start-sub').textContent = '⚠️ 오류가 발생했어요. 새 게임을 시작하세요';
@@ -2079,6 +2092,45 @@ const TestRunner = (() => {
       // localStorage가 없는 환경을 시뮬레이션: Storage.load는 항상 null/값 반환해야 함
       const result = Storage.load('nonexistent_diff_xyz');
       expect(result === null || result === undefined || !result).toBeTruthy();
+    });
+    // 정상 저장 데이터를 만든 뒤 일부를 손상시켜 easy 슬롯에 기록 → load 결과 반환
+    const loadCorrupted=mutate=>{
+      GameState.init('easy');
+      const raw=JSON.parse(GameState.serialise()); raw.timerSecs=3;
+      mutate(raw);
+      localStorage.setItem(diffSaveKey('easy'), JSON.stringify(raw));
+      const loaded=Storage.load('easy');
+      Storage.clear('easy');
+      return loaded;
+    };
+    test('정상 저장 데이터는 강화된 검증 통과', () => {
+      expect(loadCorrupted(()=>{})).toBeTruthy();
+    });
+    test('solution 행 길이 오류 → null', () => {
+      expect(loadCorrupted(raw=>{ raw.solution[4]=[1,2,3]; })).toBeFalsy();
+    });
+    test('solution 값 0 → null', () => {
+      expect(loadCorrupted(raw=>{ raw.solution[0][0]=0; })).toBeFalsy();
+    });
+    test('board 값 범위 초과(10) → null', () => {
+      expect(loadCorrupted(raw=>{ raw.board[8][8]=10; })).toBeFalsy();
+    });
+    test('given 모양 오류(빈 배열) → null', () => {
+      expect(loadCorrupted(raw=>{ raw.given=[]; })).toBeFalsy();
+    });
+    test('given 칸 값이 solution과 다름 → null', () => {
+      expect(loadCorrupted(raw=>{
+        for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(raw.given[r][c]){ raw.board[r][c]=raw.solution[r][c]%9+1; return; }
+      })).toBeFalsy();
+    });
+    test('notes 메모 값 범위 오류 → null', () => {
+      expect(loadCorrupted(raw=>{ raw.notes[0][0]=[0,12]; })).toBeFalsy();
+    });
+    test('mistakes 음수 → null', () => {
+      expect(loadCorrupted(raw=>{ raw.mistakes=-1; })).toBeFalsy();
+    });
+    test('hints 문자열 → null', () => {
+      expect(loadCorrupted(raw=>{ raw.hints='3'; })).toBeFalsy();
     });
 
     group('🚦 동일 난이도 차단 & 시작 성능');
