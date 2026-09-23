@@ -748,14 +748,16 @@ const ThemeManager = (() => {
     const isLight = theme === 'light';
     document.documentElement.classList.toggle('light', isLight);
     document.getElementById('theme-btn').textContent = isLight ? '☀️' : '🌙';
-    localStorage.setItem(THEME_KEY, theme);
+    // 저장소 차단 환경(사파리 사생활 보호 모드 등)에서는 테마 기억만 포기하고 전환은 계속 동작
+    try { localStorage.setItem(THEME_KEY, theme); } catch(e) {}
   }
   function toggle() {
     const current = document.documentElement.classList.contains('light') ? 'light' : 'dark';
     apply(current === 'light' ? 'dark' : 'light');
   }
   function init() {
-    const saved = localStorage.getItem(THEME_KEY);
+    let saved = null;
+    try { saved = localStorage.getItem(THEME_KEY); } catch(e) {}
     // 저장 없으면 시스템 설정 따름
     if (saved) { apply(saved); }
     else if (window.matchMedia('(prefers-color-scheme: light)').matches) { apply('light'); }

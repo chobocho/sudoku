@@ -149,7 +149,7 @@ function makeLocalStorage() {
 }
 
 /* ── 게임 한 벌 로드 ─────────────────────────────────── */
-function loadGame() {
+function loadGame({ brokenStorage = false } = {}) {
   const bodyHtml = SRC.slice(SRC.indexOf('<body>') + 6, SRC.indexOf('<script>'));
   const script   = SRC.slice(SRC.indexOf('<script>') + 8, SRC.lastIndexOf('</script>'));
   const body = buildBody(bodyHtml);
@@ -180,6 +180,13 @@ function loadGame() {
   };
   ctx.window = ctx;
   vm.createContext(ctx);
+  // 사파리 사생활 보호 모드·쿠키 차단처럼 localStorage 식별자 접근만으로 예외가 나는 환경 흉내
+  // (바깥 객체에 정의한 getter 는 컨텍스트 전역에 반영되지 않으므로 컨텍스트 안에서 정의)
+  if (brokenStorage) {
+    delete ctx.localStorage;
+    vm.runInContext(`Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true, get() { throw new Error('SecurityError: storage disabled'); } })`, ctx);
+  }
   // vm 컨텍스트의 전역 조회(Math, Array 등)는 인터셉터를 거쳐 매우 느리므로(실측 20배 이상)
   // 내장 객체를 함수 매개변수로 가려서 실행하고, 이후 코드는 같은 스코프의 직접 eval 로 평가한다.
   // 'use strict' 지시문이 함수 본문 첫 문장으로 유지되어 원본과 같은 strict 모드로 동작함
@@ -315,6 +322,16 @@ itest('[4] 전역 error 이벤트가 저장을 지우지 않고 시작 모달만
   g.fireWindow('error', { message: 'unrelated' });
   assertEq(savedDiffs(g), ['easy', 'medium', 'hard'], 'remaining saves');
   if (!overlay.classList.contains('show')) throw new Error('start modal not restored');
+});
+
+itest('[7] localStorage 접근 불가 환경에서도 초기화 완료 (테마·맵 풀)', () => {
+  const g = loadGame({ brokenStorage: true });   // 초기화 중 예외가 나면 여기서 실패
+  g.clock.flush();
+  assertEq(g.run(`['easy','medium','hard'].map(d => PuzzlePool.count(d))`),
+    g.run(`[POOL_TARGET, POOL_TARGET, POOL_TARGET]`), 'pool refilled');
+  assertEq(g.document.getElementById('theme-btn').textContent, '🌙', 'default theme');
+  g.document.getElementById('theme-btn').click();  // 저장 실패해도 전환은 동작
+  assertEq(g.document.documentElement.classList.contains('light'), true, 'toggled to light');
 });
 
 /* ── 인게임 TestRunner 실행 ───────────────────────────── */

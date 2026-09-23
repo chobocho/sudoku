@@ -1,3 +1,9 @@
+### [2026-09-23 05:40] localStorage 차단 환경에서 초기화 중단 수정
+- **기획:** ThemeManager만 localStorage 접근을 예외 처리하지 않아 저장소 차단 환경에서 스크립트가 멈추고 맵 풀 초기화가 누락되던 문제 수정
+- **TC:** 경계 — localStorage 접근 자체가 예외인 환경에서 초기화 완료, 기본 테마 적용, 맵 풀 목표치 보충, 테마 전환 동작
+- **개발:** sudoku.html (ThemeManager apply/init 저장소 접근 try 처리), tests/run.mjs (저장소 차단 환경 옵션)
+- **검증:** 116 passed, 0 failed (node tests/run.mjs)
+
 ### [2026-09-23 04:17] 손상 데이터로 전체 저장이 삭제되던 복구 로직 수정
 - **기획:** 저장 검증이 약해 손상 데이터가 렌더링 예외를 내고, 복구 코드가 세 난이도 저장을 모두 지우던 문제 수정
 - **TC:** 정상 — 정상 저장은 강화 검증 통과 / 경계 — solution·board·given·notes 모양·범위 오류, given 불일치, 음수·문자열 카운트는 거부, 복구·모달 오류·전역 error 시 다른 저장 유지
