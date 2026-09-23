@@ -1225,7 +1225,7 @@ const GameController = (() => {
     Renderer.renderBoard(GameState.getState());
     Renderer.updateNumpad();
     Renderer.updateStats(GameState.getState());
-    if (result.isComplete){ Timer.stop(); Storage.clear(GameState.getState().difficulty); setTimeout(showComplete,400); }
+    if (result.isComplete) finishGame(400);
   }
 
   function handleHint() {
@@ -1235,7 +1235,7 @@ const GameController = (() => {
     Renderer.renderBoard(GameState.getState());
     Renderer.updateNumpad();
     Renderer.updateStats(GameState.getState());
-    if (result.isComplete){ Timer.stop(); Storage.clear(GameState.getState().difficulty); setTimeout(showComplete,600); }
+    if (result.isComplete) finishGame(600);
   }
 
   function handleUndo() {
@@ -1265,8 +1265,16 @@ const GameController = (() => {
     Renderer.renderBoard(GameState.getState());
   }
 
-  function showComplete() {
-    const st=GameState.getState(), t=Timer.getSeconds();
+  // Timer.stop()은 경과 시간을 0으로 초기화하므로, 멈추기 전에 읽은 값을 완료 모달에 넘긴다
+  function finishGame(delay) {
+    const t=Timer.getSeconds();
+    Timer.stop();
+    Storage.clear(GameState.getState().difficulty);
+    setTimeout(()=>showComplete(t),delay);
+  }
+
+  function showComplete(t) {
+    const st=GameState.getState();
     let star, text;
     if (st.mistakes===0){ star='🏆🏆🏆'; text='실수 없이 완벽한 클리어!'; }
     else if (st.mistakes<=3){ star='⭐⭐⭐'; text='훌륭합니다! 거의 완벽해요!'; }
