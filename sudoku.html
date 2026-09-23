@@ -583,15 +583,16 @@ const PuzzlePool = (() => {
   // 메모리 내 풀: { easy:[], medium:[], hard:[] }
   let pool = { easy:[], medium:[], hard:[] };
 
-  /* solution 배열 → 고유 해시 문자열 */
-  function _hash(solution) {
-    return solution.map(r => r.join('')).join('');
+  /* 9×9 배열(puzzle 또는 solution) → 고유 해시 문자열 */
+  function _hash(grid) {
+    return grid.map(r => r.join('')).join('');
   }
 
-  /* 중복 여부: 해시 비교 */
+  /* 중복 여부: 퍼즐(단서 배치) 해시 비교.
+     풀의 모든 퍼즐은 유일해이므로 퍼즐이 같으면 같은 문제이고, 정답만 같은 퍼즐은 별개 문제로 본다 */
   function _isDuplicate(diff, map) {
-    const h = _hash(map.solution);
-    return pool[diff].some(m => _hash(m.solution) === h);
+    const h = _hash(map.puzzle);
+    return pool[diff].some(m => _hash(m.puzzle) === h);
   }
 
   /* DB(localStorage)에 현재 풀 저장 */
@@ -2376,6 +2377,18 @@ const TestRunner = (() => {
       const before = PuzzlePool.count('easy');
       PuzzlePool.add('easy', map);  // 이미 있는 맵 재추가
       expect(PuzzlePool.count('easy')).toBe(before);
+    });
+    test('PuzzlePool.add: 정답이 같아도 단서 배치가 다른 퍼즐은 별개 문제로 추가', () => {
+      PuzzlePool.init();
+      const a = SudokuGenerator.generate(DIFFICULTY.medium.clues);
+      // 빈 칸 하나에 정답을 채운 퍼즐: 단서가 늘어도 해는 여전히 하나(같은 정답)
+      const puzzleB = a.puzzle.map(r => [...r]);
+      const idx = puzzleB.flat().indexOf(0);
+      puzzleB[Math.floor(idx/9)][idx%9] = a.solution[Math.floor(idx/9)][idx%9];
+      const before = PuzzlePool.count('medium');
+      expect(PuzzlePool.add('medium', a)).toBeTruthy();
+      expect(PuzzlePool.add('medium', {puzzle: puzzleB, solution: a.solution})).toBeTruthy();
+      expect(PuzzlePool.count('medium')).toBe(before + 2);
     });
     test('PuzzlePool.exportAll(): JSON 문자열 반환', () => {
       PuzzlePool.init();
