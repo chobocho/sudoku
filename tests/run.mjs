@@ -349,6 +349,38 @@ itest('[8] 난이도 변경 시 "저장 안 함"은 현재 난이도의 기존 �
   assertEq(g.run(`Storage.load('easy')`), null, 'easy save discarded');
 });
 
+itest('[9] 자동·수동 보충이 겹쳐도 풀은 POOL_TARGET 을 넘지 않음', () => {
+  const g = loadGame();
+  g.clock.flush();                                       // 시작 보충으로 각 난이도 목표치
+  g.run(`for (let i = 0; i < 5; i++) PuzzlePool.pick('easy')`);   // 3개 남음 → 자동 보충 예약
+  g.run(`PuzzlePool.refillAllAsync(); PuzzlePool.refillAllAsync();`);
+  g.clock.flush();
+  assertEq(g.run(`['easy','medium','hard'].map(d => PuzzlePool.count(d))`),
+    g.run(`[POOL_TARGET, POOL_TARGET, POOL_TARGET]`), 'pool sizes');
+});
+
+itest('[9] "보충 완료" 메시지는 실제 보충이 끝났을 때 표시', () => {
+  const g = loadGame();
+  g.clock.flush();
+  g.run(`for (let i = 0; i < 3; i++) PuzzlePool.pick('easy')`);   // 5개 남음 (자동 보충 기준 미만 아님)
+  const target = g.run(`POOL_TARGET`);
+  const msg = g.document.getElementById('map-import-msg');
+  g.document.getElementById('btn-map-refill').click();
+  let tFull = null, tDone = null;
+  for (let t = 0; t <= 5000 && tDone === null; t += 10) {
+    const full = g.run(`PuzzlePool.count('easy')`) >= target;
+    if (full && tFull === null) tFull = t;
+    if (msg.textContent.includes('완료')) {
+      if (!full) throw new Error(`"완료" shown at ${t}ms while pool not full`);
+      tDone = t;
+    }
+    g.clock.advance(10);
+  }
+  if (tDone === null) throw new Error('completion message never shown');
+  if (tDone - tFull > 50) throw new Error(`"완료" shown ${tDone - tFull}ms after pool was full (full=${tFull}ms)`);
+  assertEq(g.document.getElementById('pool-cnt-easy').textContent, String(target), 'displayed count');
+});
+
 /* ── 인게임 TestRunner 실행 ───────────────────────────── */
 const g = loadGame();
 g.clock.flush();

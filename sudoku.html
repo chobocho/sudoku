@@ -712,25 +712,42 @@ const PuzzlePool = (() => {
 
   /* 비동기 풀 보충 (백그라운드) */
   let refillSuspended = false;  // 테스트 실행 중 true — 테스트가 유발한 보충이 복원 후 풀을 바꾸지 않도록
-  function _refillAsync(diff) {
-    if (refillSuspended) return;
-    const needed = POOL_TARGET - (pool[diff] ? pool[diff].length : 0);
-    if (needed <= 0) return;
+  // 난이도별 진행 중인 보충 작업의 완료 대기 콜백 목록. 키가 있으면 작업 진행 중.
+  // 작업을 난이도당 하나로 제한해, 겹친 호출이 각자 채워 POOL_TARGET 을 넘기지 않게 함
+  const refillWaiters = {};
+  function _refillAsync(diff, onDone) {
+    const done = onDone || (() => {});
+    if (refillSuspended || !pool[diff]) { done(); return; }
+    if (refillWaiters[diff]) { refillWaiters[diff].push(done); return; }  // 진행 중 작업에 합류
+    if (pool[diff].length >= POOL_TARGET) { done(); return; }
+    refillWaiters[diff] = [done];
     const clues = DIFFICULTY[diff] ? DIFFICULTY[diff].clues : 36;
-    let filled = 0;
+    // 생성 결과가 중복·검증 실패로 계속 거부될 때 무한 반복하지 않도록 시도 횟수 상한
+    let attempts = 0;
+    const maxAttempts = POOL_TARGET * 3;
     function fillOne() {
-      if (filled >= needed) { saveToDb(); return; }
-      const {puzzle, solution} = SudokuGenerator.generate(clues);
-      add(diff, {puzzle, solution});
-      filled++;
+      // 매 단계 현재 크기를 다시 확인 — 진행 중 pick 으로 줄어도 목표까지 채우고, 넘치지 않음
+      if (pool[diff].length >= POOL_TARGET || attempts >= maxAttempts) {
+        saveToDb();
+        const waiters = refillWaiters[diff];
+        delete refillWaiters[diff];
+        waiters.forEach(fn => fn());
+        return;
+      }
+      attempts++;
+      add(diff, SudokuGenerator.generate(clues));
       setTimeout(fillOne, 10); // 10ms 간격으로 하나씩 (메인 스레드 양보)
     }
     setTimeout(fillOne, 50); // 첫 실행은 50ms 뒤 (UI 우선)
   }
 
-  /* 모든 난이도 비동기 보충 */
-  function refillAllAsync() {
-    Object.keys(pool).forEach(d => _refillAsync(d));
+  /* 모든 난이도 비동기 보충 — onDone(선택)은 세 난이도 보충이 실제로 끝난 뒤 한 번 호출 */
+  function refillAllAsync(onDone) {
+    const diffs = Object.keys(pool);
+    let remaining = diffs.length;
+    diffs.forEach(d => _refillAsync(d, () => {
+      if (--remaining === 0 && onDone) onDone();
+    }));
   }
 
   /* 테스트 격리용: 난이도별 배열만 복사 (맵 객체는 변경되지 않으므로 얕은 복사로 충분) */
@@ -1491,19 +1508,18 @@ document.getElementById('map-file-input').addEventListener('change', (e) => {
 
 // 풀 보충 (수동)
 document.getElementById('btn-map-refill').addEventListener('click', () => {
-  PuzzlePool.refillAllAsync();
   const msg = document.getElementById('map-import-msg');
   msg.textContent = '🔄 백그라운드에서 풀을 보충하고 있어요...';
   msg.className = 'show';
-  // 2초 후 카운트 업데이트
-  setTimeout(() => {
+  // 고정 지연 대신 실제 보충 완료 시점에 카운트·메시지 갱신 (이미 가득 차 있으면 즉시 호출)
+  PuzzlePool.refillAllAsync(() => {
     ['easy','medium','hard'].forEach(d => {
       const el = document.getElementById('pool-cnt-' + d);
       if (el) el.textContent = PuzzlePool.count(d);
     });
     msg.textContent = '✅ 보충 완료';
     msg.className = 'show success';
-  }, 2500);
+  });
 });
 
 /* ── 로고 3번 클릭 → TDD 패널 열기 ── */
