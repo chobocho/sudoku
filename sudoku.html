@@ -1384,11 +1384,24 @@ document.getElementById('numpad').addEventListener('click',e=>{
   const btn=e.target.closest('.num-btn');
   if (btn) GameController.handleNumberInput(+btn.dataset.num);
 });
+// 모달·패널이 열려 있는 동안에는 뒤에 가려진 게임판으로 키 입력이 새지 않게 함
+const BLOCKING_OVERLAY_IDS=['start-overlay','complete-overlay','save-confirm-overlay','map-panel','test-panel'];
+function isOverlayOpen(){
+  return BLOCKING_OVERLAY_IDS.some(id=>{
+    const el=document.getElementById(id);
+    return el&&el.classList.contains('show');
+  });
+}
 document.addEventListener('keydown',e=>{
+  if (e.key==='Escape') {
+    document.getElementById('test-panel').classList.remove('show');
+    document.getElementById('map-panel').classList.remove('show');
+    return;
+  }
+  if (isOverlayOpen()) return;
   if (e.key>='1'&&e.key<='9') GameController.handleNumberInput(+e.key);
   if (e.key==='Backspace'||e.key==='Delete'||e.key==='0') GameController.handleErase();
   if (e.key==='z'&&(e.ctrlKey||e.metaKey)){e.preventDefault();GameController.handleUndo();}
-  if (e.key==='Escape') document.getElementById('test-panel').classList.remove('show');
   const st=GameState.getState();
   if (!st.selected||st.paused) return;
   let {r,c}=st.selected;

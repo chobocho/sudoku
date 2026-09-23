@@ -195,7 +195,14 @@ function loadGame({ brokenStorage = false } = {}) {
     `(function(${BUILTINS}){${script}\n;return code => eval(code);})(${BUILTINS})`,
     ctx, { filename: 'sudoku.html<script>' });
   const fireWindow = (type, ev = {}) => (winListeners[type] || []).forEach(fn => fn(ev));
-  return { ctx, run, clock, localStorage, document, fireWindow };
+  // 키 입력 흉내: 기본 동작 취소 여부를 확인할 수 있도록 이벤트 객체를 반환
+  const pressKey = (key, mods = {}) => {
+    const ev = { key, ctrlKey: false, metaKey: false, ...mods, defaultPrevented: false };
+    ev.preventDefault = () => { ev.defaultPrevented = true; };
+    (docListeners.keydown || []).forEach(fn => fn(ev));
+    return ev;
+  };
+  return { ctx, run, clock, localStorage, document, fireWindow, pressKey };
 }
 
 /* ── 통합 테스트 ──────────────────────────────────────── */
@@ -379,6 +386,53 @@ itest('[9] "보충 완료" 메시지는 실제 보충이 끝났을 때 표시', 
   if (tDone === null) throw new Error('completion message never shown');
   if (tDone - tFull > 50) throw new Error(`"완료" shown ${tDone - tFull}ms after pool was full (full=${tFull}ms)`);
   assertEq(g.document.getElementById('pool-cnt-easy').textContent, String(target), 'displayed count');
+});
+
+/* 시작 모달에서 난이도를 골라 게임을 시작하고, 비어 있는 첫 칸을 선택한 뒤 그 좌표를 반환 */
+function startViaModalAndSelect(g, diff = 'easy') {
+  g.clock.flush();
+  g.document.querySelector(`.start-diff-btn[data-diff="${diff}"]`).click();
+  g.clock.flush();
+  return g.run(`(() => {
+    const st = GameState.getState();
+    for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++)
+      if (!st.given[r][c] && st.board[r][c] === 0) { GameController.handleCellClick(r, c); return [r, c]; }
+  })()`);
+}
+const cellValue = (g, [r, c]) => g.run(`GameState.getState().board[${r}][${c}]`);
+const selected = g => g.run(`JSON.stringify(GameState.getState().selected)`);
+
+itest('[다] 패널이 모두 닫혀 있으면 키보드 입력이 게임에 반영됨', () => {
+  const g = loadGame();
+  const cell = startViaModalAndSelect(g);
+  g.pressKey('5');
+  assertEq(cellValue(g, cell), 5, 'digit placed');
+});
+
+itest('[다] 맵 풀 패널이 열려 있으면 숫자·방향키 입력 무시, Esc로 패널 닫힘', () => {
+  const g = loadGame();
+  const cell = startViaModalAndSelect(g);
+  const sel = selected(g);
+  g.document.getElementById('map-btn').click();
+  g.pressKey('5');
+  g.pressKey('ArrowDown');
+  assertEq(cellValue(g, cell), 0, 'digit ignored');
+  assertEq(selected(g), sel, 'selection unchanged');
+  g.pressKey('Escape');
+  assertEq(g.document.getElementById('map-panel').classList.contains('show'), false, 'map panel closed by Esc');
+});
+
+itest('[다] 시작 모달·저장 확인 모달이 열려 있으면 숫자·지우기 입력 무시', () => {
+  const g = loadGame();
+  const cell = startViaModalAndSelect(g, 'easy');
+  g.document.querySelector('.diff-btn[data-diff="hard"]').click();   // 저장 확인 모달
+  g.pressKey('7');
+  assertEq(cellValue(g, cell), 0, 'ignored under save-confirm modal');
+  g.document.getElementById('btn-save-cancel').click();
+  g.pressKey('7');
+  g.document.getElementById('btn-new').click();                      // 시작 모달
+  g.pressKey('Backspace');
+  assertEq(cellValue(g, cell), 7, 'erase ignored under start modal');
 });
 
 /* ── 인게임 TestRunner 실행 ───────────────────────────── */
