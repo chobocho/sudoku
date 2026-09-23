@@ -78,7 +78,9 @@ html.light body::before{
   height:100vh;height:100dvh;
   padding:6px 8px 4px;
   gap:4px;
-  overflow:hidden;
+  /* 칸 크기가 최소(28px)여도 화면보다 길면(가로 모드 휴대폰 등) 아래 버튼이 잘리지 않게 세로 스크롤.
+     평소에는 내용이 화면 안에 들어가므로 스크롤바가 생기지 않음 */
+  overflow-x:hidden;overflow-y:auto;
 }
 
 /* HEADER */

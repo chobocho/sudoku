@@ -531,6 +531,13 @@ itest('[라] 선택된 칸이 없을 때 방향키를 누르면 첫 칸 선택',
   assertEq(ev.defaultPrevented, true, 'page scroll prevented');
 });
 
+itest('[마] 화면보다 내용이 길면 #app 이 세로 스크롤 (잘림 방지)', () => {
+  // 레이아웃 엔진이 없으므로 CSS 규칙 수준에서만 검증
+  const rule = SRC.match(/#app\s*\{([^}]*)\}/)[1];
+  if (!/overflow-y\s*:\s*auto/.test(rule)) throw new Error(`#app rule lacks overflow-y:auto: ${rule.replace(/\s+/g, ' ')}`);
+  if (/overflow\s*:\s*hidden/.test(rule)) throw new Error('#app still has overflow:hidden');
+});
+
 /* ── 인게임 TestRunner 실행 ───────────────────────────── */
 const g = loadGame();
 g.clock.flush();
