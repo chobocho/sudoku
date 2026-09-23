@@ -1541,6 +1541,8 @@ document.getElementById('btn-save-yes').addEventListener('click', () => {
 });
 document.getElementById('btn-save-no').addEventListener('click', () => {
   // 저장 없이 즉시 새 난이도로 게임 시작
+  // 탭 전환·새 게임 버튼 등으로 이미 자동 저장된 현재 게임도 버려야 이어하기에 다시 나타나지 않음
+  Storage.clear(GameState.getState().difficulty);
   document.getElementById('save-confirm-overlay').classList.remove('show');
   const diff = _pendingDiff;
   _pendingDiff = null;

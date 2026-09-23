@@ -334,6 +334,21 @@ itest('[7] localStorage 접근 불가 환경에서도 초기화 완료 (테마·
   assertEq(g.document.documentElement.classList.contains('light'), true, 'toggled to light');
 });
 
+itest('[8] 난이도 변경 시 "저장 안 함"은 현재 난이도의 기존 저장을 삭제', () => {
+  const g = loadGame();
+  g.clock.flush();
+  g.run(`GameController.startGame('easy')`);
+  g.run(`autoSave()`);                                   // 탭 전환 등으로 이미 자동 저장된 상태
+  assertEq(g.run(`Storage.load('easy') !== null`), true, 'precondition: easy saved');
+  g.document.querySelector('.diff-btn[data-diff="medium"]').click();
+  if (!g.document.getElementById('save-confirm-overlay').classList.contains('show'))
+    throw new Error('save confirm modal not shown');
+  g.document.getElementById('btn-save-no').click();
+  g.clock.flush();                                       // rAF 이후 새 게임 시작
+  assertEq(g.run(`GameState.getState().difficulty`), 'medium', 'switched difficulty');
+  assertEq(g.run(`Storage.load('easy')`), null, 'easy save discarded');
+});
+
 /* ── 인게임 TestRunner 실행 ───────────────────────────── */
 const g = loadGame();
 g.clock.flush();
