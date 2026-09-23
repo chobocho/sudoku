@@ -1,3 +1,9 @@
+### [2026-09-23 06:54] 로컬 업로드 스크립트를 git 추적에서 제외
+- **기획:** 로컬 전용 upload.sh 가 실수로 커밋되지 않도록 .gitignore 추가
+- **TC:** 해당 없음 (git check-ignore 로 upload.sh 제외 확인)
+- **개발:** .gitignore
+- **검증:** 131 passed, 0 failed (기존 테스트 영향 없음)
+
 ### [2026-09-23 06:48] 작은 화면에서 하단 버튼 잘림 방지 (세로 스크롤)
 - **기획:** 칸 크기가 최소여도 화면보다 긴 경우(가로 모드 휴대폰 등) overflow:hidden 때문에 하단 버튼이 잘리던 문제를 세로 스크롤로 해결
 - **TC:** #app 규칙에 overflow-y:auto 존재, overflow:hidden 제거 확인
