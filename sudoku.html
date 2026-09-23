@@ -2108,10 +2108,8 @@ const TestRunner = (() => {
       expect(result.paused).toBeFalsy();
       expect(result.history.length).toBe(0);
     });
-    test('localStorage 불가 환경 → load는 null (시뮬레이션)', () => {
-      // localStorage가 없는 환경을 시뮬레이션: Storage.load는 항상 null/값 반환해야 함
-      const result = Storage.load('nonexistent_diff_xyz');
-      expect(result === null || result === undefined || !result).toBeTruthy();
+    test('존재하지 않는 난이도 슬롯 → load는 null', () => {
+      expect(Storage.load('nonexistent_diff_xyz')).toBe(null);
     });
     // 정상 저장 데이터를 만든 뒤 일부를 손상시켜 easy 슬롯에 기록 → load 결과 반환
     const loadCorrupted=mutate=>{
@@ -2154,16 +2152,11 @@ const TestRunner = (() => {
     });
 
     group('🚦 동일 난이도 차단 & 시작 성능');
-    test('게임 중 동일 난이도 버튼: diff-btn.active에 pointer-events:none CSS', () => {
-      // CSS 규칙에 pointer-events:none이 포함돼 있어야 함
-      const styleText = Array.from(document.styleSheets)
-        .flatMap(s => { try { return Array.from(s.cssRules); } catch(e) { return []; } })
-        .map(r => r.cssText || '')
-        .join(' ');
-      // pointer-events: none이 .diff-btn.active 규칙 안에 있는지 확인
-      const hasRule = styleText.includes('pointer-events') ||
-                      document.documentElement.innerHTML.includes('pointer-events:none');
-      expect(hasRule).toBeTruthy();
+    // 스타일 원문에서 선택자 규칙 본문을 찾아 속성 포함 여부 확인 (페이지 전체 문자열 검색은 다른 규칙에도 걸림)
+    const cssRuleHas=(selectorRe, propRe)=>
+      new RegExp(selectorRe+'\\s*\\{[^}]*'+propRe).test(document.documentElement.innerHTML);
+    test('게임 중 동일 난이도 버튼: .diff-btn.active 규칙에 pointer-events:none', () => {
+      expect(cssRuleHas('\\.diff-btn\\.active','pointer-events\\s*:\\s*none')).toBeTruthy();
     });
     test('diff-btn.active는 현재 난이도와 일치해야 함', () => {
       GameState.init('medium');
@@ -2174,39 +2167,38 @@ const TestRunner = (() => {
       expect(activeBtn).toBeTruthy();
       expect(activeBtn.dataset.diff).toBe('medium');
     });
-    test('easy 게임 중 easy 버튼 클릭 → GameState 변경 없음', () => {
-      // 게임 상태 초기화
+    test('easy 게임 중 easy 버튼 클릭 → 게임 유지, 확인 모달 없음', () => {
       const st = GameState.init('easy');
       const boardBefore = JSON.stringify(st.board);
-      // 같은 난이도는 차단되므로 board가 바뀌지 않아야 함
-      // (실제 버튼 클릭은 DOM이므로 조건 로직만 직접 검증)
-      const isSame = (st.board && !st.complete && 'easy' === st.difficulty);
-      expect(isSame).toBeTruthy();  // 차단 조건이 true → return
-      expect(JSON.stringify(GameState.getState().board)).toBe(boardBefore);
+      document.querySelector('.diff-btn[data-diff="easy"]').click();
+      expect(GameState.getState()===st).toBeTruthy();
+      expect(JSON.stringify(st.board)).toBe(boardBefore);
+      expect(document.getElementById('save-confirm-overlay').classList.contains('show')).toBeFalsy();
     });
-    test('hard 게임 중 medium 버튼 클릭 → 차단 조건 false (변경 허용)', () => {
-      const st = GameState.init('hard');
-      const isSame = (st.board && !st.complete && 'medium' === st.difficulty);
-      expect(isSame).toBeFalsy();   // 차단 조건 false → 저장 확인 모달 진행
+    test('hard 게임 중 medium 버튼 클릭 → 저장 확인 모달 표시', () => {
+      GameState.init('hard');
+      const overlay = document.getElementById('save-confirm-overlay');
+      document.querySelector('.diff-btn[data-diff="medium"]').click();
+      const shown = overlay.classList.contains('show');
+      document.getElementById('btn-save-cancel').click();   // 모달 닫고 대기 난이도 정리
+      expect(shown).toBeTruthy();
+      expect(overlay.classList.contains('show')).toBeFalsy();
     });
     test('loading-spinner 엘리먼트 존재', () => {
       const el = document.getElementById('start-spinner');
       expect(el !== null).toBeTruthy();
     });
-    test('start-diff-btn 클릭 후 loading 클래스 없음 (rAF 완료 후)', done => {
-      // rAF 완료 후 loading 클래스 제거 확인은 비동기이므로
-      // 엘리먼트가 존재하는지만 검증
-      const btns = document.querySelectorAll('.start-diff-btn');
-      expect(btns.length).toBe(3);
+    test('start-diff-btn 3개 존재', () => {
+      expect(document.querySelectorAll('.start-diff-btn').length).toBe(3);
     });
 
     group('🔀 난이도 변경 플로우');
-    test('_startDiffDirectly: 저장 없으면 새 게임 시작',()=>{
+    test('Storage.clear 후 해당 슬롯 load는 null',()=>{
       Storage.clear('easy');
       // 저장 없을 때 load는 null
       expect(Storage.load('easy')).toBeFalsy();
     });
-    test('_startDiffDirectly: 저장 있으면 해당 데이터 로드',()=>{
+    test('save/load 왕복: difficulty·timerSecs 보존',()=>{
       GameState.init('medium'); Storage.save('medium', 55);
       const s = Storage.load('medium');
       expect(s).toBeTruthy();
@@ -2311,9 +2303,8 @@ const TestRunner = (() => {
         if (puzzle[r][c] !== 0 && puzzle[r][c] !== solution[r][c])
           throw new Error(`Puzzle/solution mismatch at [${r}][${c}]`);
     });
-    test('will-change: opacity가 overlay에 설정됨', () => {
-      const src = document.documentElement.innerHTML;
-      expect(src.includes('will-change')).toBeTruthy();
+    test('will-change: opacity가 .overlay 규칙에 설정됨', () => {
+      expect(cssRuleHas('\\.overlay','will-change\\s*:\\s*opacity')).toBeTruthy();
     });
 
     group('🗂️ PuzzlePool — 맵 풀 관리');
@@ -2363,13 +2354,13 @@ const TestRunner = (() => {
       expect(Array.isArray(map.solution)).toBeTruthy();
       expect(map.puzzle.length).toBe(9);
     });
-    test('PuzzlePool.pick: 반환 후 pool count 감소', () => {
+    test('PuzzlePool.pick: 반환 후 pool count 1 감소', () => {
       PuzzlePool.init();
+      PuzzlePool.add('medium', SudokuGenerator.generate(DIFFICULTY.medium.clues));
       const before = PuzzlePool.count('medium');
       PuzzlePool.pick('medium');
-      const after = PuzzlePool.count('medium');
-      // pick 후 count가 줄었거나 자동 보충으로 유지됨 (둘 다 허용)
-      expect(after >= 0).toBeTruthy();
+      // 테스트 중에는 자동 보충이 중단되므로 정확히 1 감소해야 함
+      expect(PuzzlePool.count('medium')).toBe(before - 1);
     });
     test('PuzzlePool.add: 맵 추가 후 count 증가', () => {
       PuzzlePool.init();
@@ -2393,14 +2384,15 @@ const TestRunner = (() => {
       const parsed = JSON.parse(json);
       expect(Array.isArray(parsed)).toBeTruthy();
     });
-    test('PuzzlePool.importFrom(json): 맵 추가됨', () => {
+    test('PuzzlePool.importFrom(json): 맵 1개 추가됨', () => {
       PuzzlePool.init();
       const {puzzle, solution} = SudokuGenerator.generate(27);
       const json = JSON.stringify([{difficulty:'medium', puzzle, solution}]);
       const before = PuzzlePool.count('medium');
       const result = PuzzlePool.importFrom(json);
-      expect(result.added >= 0).toBeTruthy();
-      expect(result.skipped >= 0).toBeTruthy();
+      expect(result.added).toBe(1);
+      expect(result.skipped).toBe(0);
+      expect(PuzzlePool.count('medium')).toBe(before + 1);
     });
     test('PuzzlePool.importFrom: 중복 import시 skipped 증가', () => {
       PuzzlePool.init();
@@ -2422,21 +2414,16 @@ const TestRunner = (() => {
       expect(h1).toBe(h2);
     });
     test('PuzzlePool 맵 hash: solution 다르면 hash 다름', () => {
-      const m1 = SudokuGenerator.generate(36);
-      const m2 = SudokuGenerator.generate(36);
-      // 두 solution이 같을 확률은 극히 낮음
-      const h1 = PuzzlePool._hash(m1.solution);
-      const h2 = PuzzlePool._hash(m2.solution);
-      // 같을 수도 있으나 다른 경우만 검증 (생략 불가시 pass)
-      expect(typeof h1).toBe('string');
-      expect(typeof h2).toBe('string');
+      const {solution} = SudokuGenerator.generate(36);
+      const other = solution.map(r => r.map(v => v % 9 + 1));   // 숫자 치환 → 반드시 다른 정답
+      expect(PuzzlePool._hash(solution) === PuzzlePool._hash(other)).toBeFalsy();
     });
-    test('PuzzlePool.saveToDb/loadFromDb 왕복', () => {
+    test('PuzzlePool.saveToDb/loadFromDb 왕복: 난이도별 개수 일치', () => {
       PuzzlePool.init();
+      PuzzlePool.add('easy', SudokuGenerator.generate(DIFFICULTY.easy.clues));
       PuzzlePool.saveToDb();
       const loaded = PuzzlePool.loadFromDb();
-      expect(loaded).toBeTruthy();
-      expect(typeof loaded).toBe('object');
+      ['easy','medium','hard'].forEach(d => expect(loaded[d].length).toBe(PuzzlePool.count(d)));
     });
 
     group('⏱️ Timer');
