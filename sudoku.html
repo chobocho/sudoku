@@ -2,7 +2,8 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- 확대 허용(접근성). 더블탭 확대는 html/body 의 touch-action:manipulation 으로 계속 막힘 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🧩 스도쿠 마스터</title>
 <style>
 /* ── 오프라인 전용 — 시스템 폰트만 사용 ── */
@@ -424,8 +425,8 @@ html.light .act-btn:hover{background:var(--cell-hl);}
 
   <header>
     <span id="logo">🧩 스도쿠 마스터</span>
-    <button id="map-btn" title="맵 풀 관리" style="flex-shrink:0;width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);background:var(--card);cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:all .25s;">🗂️</button>
-    <button id="theme-btn" title="테마 전환">🌙</button>
+    <button id="map-btn" title="맵 풀 관리" aria-label="맵 풀 관리" style="flex-shrink:0;width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);background:var(--card);cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:all .25s;">🗂️</button>
+    <button id="theme-btn" title="테마 전환" aria-label="테마 전환">🌙</button>
   </header>
 
   <div class="diff-bar" id="diff-bar">
@@ -441,7 +442,7 @@ html.light .act-btn:hover{background:var(--cell-hl);}
   </div>
 
   <div class="board-wrap" id="board-wrap">
-    <div id="board"></div>
+    <div id="board" role="group" tabindex="0" aria-label="스도쿠 보드 — 방향키로 칸 이동, 숫자키로 입력"></div>
   </div>
 
   <div class="numpad" id="numpad"></div>
@@ -540,7 +541,7 @@ html.light .act-btn:hover{background:var(--cell-hl);}
 
 <!-- 맵 풀 관리 패널 -->
 <div id="map-panel">
-  <button id="map-close">✕</button>
+  <button id="map-close" aria-label="닫기">✕</button>
   <h3>🗂️ 퍼즐 맵 풀 관리</h3>
   <div class="pool-stats">
     <div class="pool-stat-card"><div class="ps-label">🌱 초급</div><div class="ps-val" id="pool-cnt-easy">-</div></div>
@@ -558,7 +559,7 @@ html.light .act-btn:hover{background:var(--cell-hl);}
 
 <!-- TDD 패널 (로고 3번 클릭) -->
 <div id="test-panel">
-  <button id="test-close">✕</button>
+  <button id="test-close" aria-label="닫기">✕</button>
   <h3>🧪 TDD 테스트 결과</h3>
   <div id="test-output">테스트를 실행하는 중...</div>
 </div>
@@ -1072,10 +1073,22 @@ const Renderer = (() => {
       const cell=document.createElement('div');
       cell.className='cell';
       cell.dataset.r=r; cell.dataset.c=c;
+      cell.setAttribute('role','button');
       if (c===2||c===5) cell.classList.add('box-right');
       if (r===2||r===5) cell.classList.add('box-bottom');
       boardEl.appendChild(cell);
     }
+  }
+
+  // 스크린리더용 칸 설명. 일시정지 중에는 화면처럼 값을 숨김
+  function cellLabel(state,r,c) {
+    const pos=`${r+1}행 ${c+1}열`;
+    if (state.paused) return `${pos}, 일시정지 중`;
+    const v=state.board[r][c];
+    if (state.given[r][c]) return `${pos}, ${v} (고정)`;
+    if (v!==0) return `${pos}, ${v}${state.solution[r][c]===v?'':' (오답)'}`;
+    const na=state.notes[r][c];
+    return na.length ? `${pos}, 빈 칸, 메모 ${[...na].sort((a,b)=>a-b).join(' ')}` : `${pos}, 빈 칸`;
   }
 
   function renderBoard(state) {
@@ -1088,6 +1101,9 @@ const Renderer = (() => {
       if (c===2||c===5) cell.classList.add('box-right');
       if (r===2||r===5) cell.classList.add('box-bottom');
       const val=state.board[r][c];
+      cell.setAttribute('aria-label',cellLabel(state,r,c));
+      if (sel&&sel.r===r&&sel.c===c) cell.setAttribute('aria-current','true');
+      else cell.removeAttribute('aria-current');
       if (sel) {
         if (sel.r===r&&sel.c===c) cell.classList.add('selected');
         else if (sel.r===r||sel.c===c||(Math.floor(sel.r/3)===Math.floor(r/3)&&Math.floor(sel.c/3)===Math.floor(c/3)))
@@ -1411,7 +1427,15 @@ document.addEventListener('keydown',e=>{
   if (e.key==='Backspace'||e.key==='Delete'||e.key==='0') GameController.handleErase();
   if (e.key==='z'&&(e.ctrlKey||e.metaKey)){e.preventDefault();GameController.handleUndo();}
   const st=GameState.getState();
-  if (!st.selected||st.paused) return;
+  if (!st.board||st.paused) return;
+  if (!st.selected) {
+    // 선택 칸이 없으면 방향키로 첫 칸부터 시작 — 마우스 없이 키보드만으로 조작 가능하도록
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+      e.preventDefault();
+      GameController.handleCellClick(0,0);
+    }
+    return;
+  }
   let {r,c}=st.selected;
   const map={ArrowUp:[r-1,c],ArrowDown:[r+1,c],ArrowLeft:[r,c-1],ArrowRight:[r,c+1]};
   if (!map[e.key]) return;

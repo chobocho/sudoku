@@ -39,7 +39,11 @@ class FakeElement {
     this._text = '';
     this._html = '';
     this.value = ''; this.checked = false; this.files = []; this.onclick = null;
+    this.attributes = { ...attrs };   // 마크업 속성 + setAttribute 값 (role, aria-*, tabindex 등)
   }
+  getAttribute(k)    { return k in this.attributes ? this.attributes[k] : null; }
+  setAttribute(k, v) { this.attributes[k] = String(v); }
+  removeAttribute(k) { delete this.attributes[k]; }
   get className()  { return [...this.classList.set].join(' '); }
   set className(v) { this.classList.set = new Set(String(v).split(/\s+/).filter(Boolean)); }
   get textContent() { return this._text + this.children.map(c => c.textContent).join(''); }
@@ -481,6 +485,50 @@ itest('[나] 첫 실행·게임 완료 후에는 닫기 버튼 숨김', () => {
   g.document.getElementById('btn-play-again').click();
   assertEq(isShown(g, 'start-overlay'), true, 'start modal shown');
   assertEq(closeBtnVisible(g), false, 'hidden after completion');
+});
+
+itest('[라] 화면 확대 허용 (viewport 에 user-scalable=no·maximum-scale 없음)', () => {
+  const meta = SRC.match(/<meta name="viewport" content="([^"]*)"/)[1];
+  if (/user-scalable\s*=\s*no|maximum-scale/.test(meta)) throw new Error(`viewport = ${meta}`);
+});
+
+itest('[라] 보드가 Tab 으로 포커스되고 역할·이름이 있음, 아이콘 버튼에 aria-label', () => {
+  const g = loadGame();
+  const board = g.document.getElementById('board');
+  assertEq(board.getAttribute('tabindex'), '0', 'board tabindex');
+  assertEq(board.getAttribute('role'), 'group', 'board role');
+  if (!board.getAttribute('aria-label')) throw new Error('board aria-label missing');
+  for (const id of ['map-btn', 'theme-btn', 'map-close', 'test-close', 'start-close'])
+    if (!g.document.getElementById(id).getAttribute('aria-label')) throw new Error(`${id} aria-label missing`);
+});
+
+itest('[라] 칸마다 위치·상태를 읽을 수 있는 aria-label, 선택 칸은 aria-current', () => {
+  const g = loadGame();
+  const [r, c] = startViaModalAndSelect(g);
+  const cellEl = (rr, cc) => g.document.querySelector(`.cell[data-r="${rr}"][data-c="${cc}"]`);
+  const st = g.run(`GameState.getState()`);
+  let gr = -1, gc = -1;
+  for (let i = 0; i < 81 && gr < 0; i++) if (st.given[Math.floor(i / 9)][i % 9]) { gr = Math.floor(i / 9); gc = i % 9; }
+  assertEq(cellEl(r, c).getAttribute('role'), 'button', 'cell role');
+  assertEq(cellEl(r, c).getAttribute('aria-label'), `${r + 1}행 ${c + 1}열, 빈 칸`, 'empty cell label');
+  assertEq(cellEl(gr, gc).getAttribute('aria-label'), `${gr + 1}행 ${gc + 1}열, ${st.board[gr][gc]} (고정)`, 'given cell label');
+  assertEq(cellEl(r, c).getAttribute('aria-current'), 'true', 'selected cell');
+  const wrong = st.solution[r][c] % 9 + 1;
+  g.pressKey(String(wrong));
+  assertEq(cellEl(r, c).getAttribute('aria-label'), `${r + 1}행 ${c + 1}열, ${wrong} (오답)`, 'wrong value label');
+  g.document.getElementById('btn-pause').click();
+  assertEq(cellEl(gr, gc).getAttribute('aria-label'), `${gr + 1}행 ${gc + 1}열, 일시정지 중`, 'paused hides value');
+});
+
+itest('[라] 선택된 칸이 없을 때 방향키를 누르면 첫 칸 선택', () => {
+  const g = loadGame();
+  g.clock.flush();
+  g.document.querySelector('.start-diff-btn[data-diff="easy"]').click();
+  g.clock.flush();
+  assertEq(selected(g), 'null', 'nothing selected');
+  const ev = g.pressKey('ArrowRight');
+  assertEq(selected(g), JSON.stringify({ r: 0, c: 0 }), 'first cell selected');
+  assertEq(ev.defaultPrevented, true, 'page scroll prevented');
 });
 
 /* ── 인게임 TestRunner 실행 ───────────────────────────── */
