@@ -1,3 +1,9 @@
+### [2026-09-23 04:06] TDD 패널 실행 시 진행 중 게임·저장 데이터 손상 수정
+- **기획:** 로고×3 테스트가 실제 GameState·맵 풀·localStorage를 덮어써 게임과 전체 저장이 사라지던 문제를 백업/복원으로 격리
+- **TC:** 정상 — runAll 전후 게임 상태·타이머·맵 풀·sudoku_* 저장 키·난이도 버튼 동일 / 경계 — 복원 후 지연 저장·풀 보충이 끝나도 동일, 타이머 계속 진행
+- **개발:** sudoku.html (GameState/PuzzlePool _snapshot·_restore, 테스트 중 풀 보충 중단, runAll try/finally), tests/run.mjs
+- **검증:** 89 passed, 0 failed (node tests/run.mjs)
+
 ### [2026-09-23 03:58] 완료 모달 경과 시간 0초 표시 버그 수정
 - **기획:** Timer.stop()이 초를 0으로 초기화한 뒤 showComplete가 시간을 읽어 항상 0분 0초로 표시되던 문제 수정
 - **TC:** 정상 — 숫자 입력으로 완료 시 2분 5초 표시 / 경계 — 마지막 칸을 힌트로 완료 시 1분 1초 표시

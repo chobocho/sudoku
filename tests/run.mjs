@@ -243,6 +243,37 @@ itest('[2] 완료 모달에 실제 경과 시간이 표시됨 (힌트로 완료)
   if (!msg.includes('1분 1초')) throw new Error(`complete-msg = ${JSON.stringify(msg)}`);
 });
 
+itest('[3] TDD 패널(runAll) 실행 전후 진행 중 게임·저장·풀·타이머가 그대로', () => {
+  const g = loadGame();
+  g.clock.flush();                               // 시작 시 백그라운드 풀 보충 완료
+  g.run(`GameController.startGame('medium')`);
+  g.clock.advance(42000);
+  g.run(`(() => {
+    const st = GameState.getState();
+    for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++)
+      if (!st.given[r][c] && st.board[r][c] === 0) {
+        GameController.handleCellClick(r, c);
+        GameController.handleNumberInput(st.solution[r][c]); return;
+      }
+  })()`);
+  g.run(`Storage.save('medium', Timer.getSeconds()); Storage.save('easy', 7);`);
+  const snap = () => ({
+    state:  g.run(`JSON.stringify(GameState.getState())`),
+    timer:  g.run(`Timer.getSeconds()`),
+    pool:   g.run(`PuzzlePool.exportAll()`),
+    ls:     g.localStorage._dump(),
+    active: g.document.querySelector('.diff-btn.active')?.dataset.diff,
+  });
+  const before = snap();
+  g.run(`TestRunner.runAll()`);
+  g.clock.flush();                               // 테스트가 예약한 비동기 저장까지 반영
+  const after = snap();
+  for (const k of Object.keys(before)) assertEq(after[k], before[k], k);
+  // 타이머가 여전히 이 게임을 계속 셈
+  g.clock.advance(3000);
+  assertEq(g.run(`Timer.getSeconds()`), before.timer + 3, 'timer keeps running');
+});
+
 /* ── 인게임 TestRunner 실행 ───────────────────────────── */
 const g = loadGame();
 g.clock.flush();

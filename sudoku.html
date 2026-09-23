@@ -731,7 +731,9 @@ const PuzzlePool = (() => {
   }
 
   /* 비동기 풀 보충 (백그라운드) */
+  let refillSuspended = false;  // 테스트 실행 중 true — 테스트가 유발한 보충이 복원 후 풀을 바꾸지 않도록
   function _refillAsync(diff) {
+    if (refillSuspended) return;
     const needed = POOL_TARGET - (pool[diff] ? pool[diff].length : 0);
     if (needed <= 0) return;
     const clues = DIFFICULTY[diff] ? DIFFICULTY[diff].clues : 36;
@@ -751,7 +753,12 @@ const PuzzlePool = (() => {
     Object.keys(pool).forEach(d => _refillAsync(d));
   }
 
-  return { init, pick, add, count, exportAll, importFrom, saveToDb, loadFromDb, _hash, refillAllAsync };
+  /* 테스트 격리용: 난이도별 배열만 복사 (맵 객체는 변경되지 않으므로 얕은 복사로 충분) */
+  function _snapshot() { return { easy:[...pool.easy], medium:[...pool.medium], hard:[...pool.hard] }; }
+  function _restore(s) { pool = { easy:[...s.easy], medium:[...s.medium], hard:[...s.hard] }; }
+  function _suspendRefill(flag) { refillSuspended = !!flag; }
+
+  return { init, pick, add, count, exportAll, importFrom, saveToDb, loadFromDb, _hash, refillAllAsync, _snapshot, _restore, _suspendRefill };
 })();
 
 
@@ -974,7 +981,11 @@ const GameState = (() => {
     });
   }
 
-  return {init,loadRaw,getState,select,placeNumber,undo,useHint,countNum,togglePause,serialise};
+  // 테스트 격리용: 진행 중 상태 객체를 통째로 보관/복원 (타이머 콜백이 같은 객체를 계속 갱신하도록 참조 유지)
+  function _snapshot() { return state; }
+  function _restore(s) { state=s; }
+
+  return {init,loadRaw,getState,select,placeNumber,undo,useHint,countNum,togglePause,serialise,_snapshot,_restore};
 })();
 
 // ── 4. 렌더러 ─────────────────────────────────────────
@@ -1664,7 +1675,43 @@ const TestRunner = (() => {
     toBeType:t=>{ if(typeof v!==t) throw new Error(`Expected type ${t}`); },
   });
 
+  // 테스트는 실제 GameState·PuzzlePool·localStorage 를 그대로 쓰므로,
+  // 진행 중인 게임·저장·맵 풀·타이머·난이도 버튼을 백업했다가 끝나면(실패해도) 반드시 복원한다.
+  const LS_PREFIX='sudoku_';
+  function _sudokuKeys(){
+    const keys=[];
+    for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k&&k.startsWith(LS_PREFIX)) keys.push(k); }
+    return keys;
+  }
+  function _backupLiveState(){
+    PuzzlePool._suspendRefill(true);
+    const ls={};
+    try{ _sudokuKeys().forEach(k=>{ ls[k]=localStorage.getItem(k); }); }catch(e){}
+    return {
+      game:GameState._snapshot(), pool:PuzzlePool._snapshot(), timer:Timer.getSeconds(), ls,
+      activeDiff:Array.from(document.querySelectorAll('.diff-btn.active')).map(b=>b.dataset.diff),
+    };
+  }
+  function _restoreLiveState(b){
+    GameState._restore(b.game);
+    PuzzlePool._restore(b.pool);   // 테스트가 예약한 지연 saveToDb 는 복원된 풀을 저장하게 됨
+    PuzzlePool._suspendRefill(false);
+    Timer.setSeconds(b.timer);
+    try{
+      _sudokuKeys().forEach(k=>localStorage.removeItem(k));
+      Object.keys(b.ls).forEach(k=>localStorage.setItem(k,b.ls[k]));
+    }catch(e){}
+    document.querySelectorAll('.diff-btn').forEach(btn=>
+      btn.classList.toggle('active', b.activeDiff.includes(btn.dataset.diff)));
+  }
+
   function runAll(){
+    const backup=_backupLiveState();
+    try{ return _runAllTests(); }
+    finally{ _restoreLiveState(backup); }
+  }
+
+  function _runAllTests(){
     results=[];
 
     group('🔢 SudokuGenerator');
