@@ -538,6 +538,64 @@ itest('[마] 화면보다 내용이 길면 #app 이 세로 스크롤 (잘림 방
   if (/overflow\s*:\s*hidden/.test(rule)) throw new Error('#app still has overflow:hidden');
 });
 
+/* ── 같은 숫자 칸들의 행·열·박스 강조 ─────────────────────── */
+/* renderBoard 만 검증하려고 게임 상태를 직접 만든다. 5 가 (0,0)·(4,4)·(8,8) 세 곳에 있고 (2,7) 에는 오답 5 */
+function renderCrafted(g, sel) {
+  g.run(`(() => {
+    const z = () => Array.from({ length: 9 }, () => Array(9).fill(0));
+    const st = { board: z(), given: z().map(r => r.map(() => false)), solution: z(),
+                 notes: Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => [])),
+                 selected: ${JSON.stringify(sel)}, paused: false };
+    [[0, 0], [4, 4], [8, 8]].forEach(([r, c]) => { st.board[r][c] = 5; st.solution[r][c] = 5; st.given[r][c] = true; });
+    st.board[2][7] = 5; st.solution[2][7] = 3;          // 오답 5
+    st.board[1][1] = 7; st.solution[1][1] = 7;
+    Renderer.renderBoard(st);
+  })()`);
+}
+const cls = (g, r, c, name) => g.document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`).classList.contains(name);
+const sameBox = (a, b) => Math.floor(a.r / 3) === Math.floor(b.r / 3) && Math.floor(a.c / 3) === Math.floor(b.c / 3);
+const peerOf = (r, c, src) => src.some(s => s.r === r || s.c === c || sameBox({ r, c }, s));
+
+itest('[바] 숫자 칸 선택 시 같은 숫자 모든 칸의 행·열·박스가 강조됨 (오답 포함)', () => {
+  const g = loadGame();
+  startViaModalAndSelect(g);
+  renderCrafted(g, { r: 4, c: 4 });
+  const fives = [{ r: 0, c: 0 }, { r: 4, c: 4 }, { r: 8, c: 8 }, { r: 2, c: 7 }];
+  for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) {
+    const isFive = fives.some(f => f.r === r && f.c === c);
+    assertEq(cls(g, r, c, 'selected'), isFive, `selected at ${r},${c}`);
+    if (!isFive) assertEq(cls(g, r, c, 'highlight'), peerOf(r, c, fives), `highlight at ${r},${c}`);
+  }
+});
+
+itest('[바] 빈 칸 선택 시 자신의 행·열·박스만 강조', () => {
+  const g = loadGame();
+  startViaModalAndSelect(g);
+  renderCrafted(g, { r: 6, c: 1 });
+  for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) {
+    if (r === 6 && c === 1) { assertEq(cls(g, r, c, 'selected'), true, 'own cell selected'); continue; }
+    assertEq(cls(g, r, c, 'selected'), false, `selected at ${r},${c}`);
+    assertEq(cls(g, r, c, 'highlight'), peerOf(r, c, [{ r: 6, c: 1 }]), `highlight at ${r},${c}`);
+  }
+});
+
+itest('[바] 선택 없음·일시정지 상태에서도 렌더링 오류 없고 강조 없음', () => {
+  const g = loadGame();
+  startViaModalAndSelect(g);
+  renderCrafted(g, null);
+  for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++)
+    if (cls(g, r, c, 'highlight') || cls(g, r, c, 'selected')) throw new Error(`stray class at ${r},${c}`);
+  g.run(`Renderer.renderBoard(Object.assign(GameState.getState(), { paused: true, selected: { r: 0, c: 0 } }))`);
+});
+
+itest('[바] 다크 모드 강조색이 바탕색과 구분됨', () => {
+  const root = SRC.match(/:root\s*\{([^}]*--surface[^}]*)\}/)[1];   // 색 변수를 담은 :root 블록
+  const hex = v => parseInt(root.match(new RegExp(`--${v}:\\s*#([0-9a-f]{6})`, 'i'))[1], 16);
+  const lum = h => ((h >> 16) & 255) + ((h >> 8) & 255) + (h & 255);
+  const diff = lum(hex('cell-hl')) - lum(hex('surface'));
+  if (diff < 45) throw new Error(`--cell-hl barely differs from --surface (sum diff ${diff})`);
+});
+
 /* ── 인게임 TestRunner 실행 ───────────────────────────── */
 const g = loadGame();
 g.clock.flush();

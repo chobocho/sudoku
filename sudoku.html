@@ -22,7 +22,7 @@
   --error:#ef4444; --success:#10b981;
   --text:#e2e8f0; --text-dim:#64748b; --given:#a5b4fc;
   --glow:0 0 20px rgba(124,58,237,0.4);
-  --cell-hover:#1e1e36; --cell-sel:#2d1b69; --cell-hl:#1c1c30;
+  --cell-hover:#1e1e36; --cell-sel:#2d1b69; --cell-hl:#232344;
   --box-border:#4a4a7a; --cell-error-bg:#2d1218;
   --board-glow:0 0 30px rgba(124,58,237,.15);
   --board-inset:inset 0 1px 0 rgba(255,255,255,.05);
@@ -1096,6 +1096,15 @@ const Renderer = (() => {
   function renderBoard(state) {
     wrapEl.classList.toggle('paused',!!state.paused);
     const sel=state.selected;
+    // 강조 근원 칸: 선택 칸에 숫자가 있으면 같은 숫자가 있는 모든 칸(오답 포함), 빈 칸이면 선택 칸 하나.
+    // 그 숫자가 더 들어갈 수 없는 범위 전체(각 근원의 행·열·박스)를 보여주기 위함. O(81) 시간, O(9) 공간
+    const sources=[];
+    if (sel) {
+      const sv=state.board[sel.r][sel.c];
+      if (sv) { for (let r=0;r<9;r++) for (let c=0;c<9;c++) if (state.board[r][c]===sv) sources.push({r,c}); }
+      else sources.push(sel);
+    }
+    const isPeer=(r,c)=>sources.some(s=>s.r===r||s.c===c||(Math.floor(s.r/3)===Math.floor(r/3)&&Math.floor(s.c/3)===Math.floor(c/3)));
     boardEl.querySelectorAll('.cell').forEach(cell=>{
       const r=+cell.dataset.r, c=+cell.dataset.c;
       cell.innerHTML='';
@@ -1107,10 +1116,8 @@ const Renderer = (() => {
       if (sel&&sel.r===r&&sel.c===c) cell.setAttribute('aria-current','true');
       else cell.removeAttribute('aria-current');
       if (sel) {
-        if (sel.r===r&&sel.c===c) cell.classList.add('selected');
-        else if (sel.r===r||sel.c===c||(Math.floor(sel.r/3)===Math.floor(r/3)&&Math.floor(sel.c/3)===Math.floor(c/3)))
-          cell.classList.add('highlight');
-        if (val&&val===state.board[sel.r][sel.c]) cell.classList.add('selected');
+        if ((sel.r===r&&sel.c===c)||(val&&val===state.board[sel.r][sel.c])) cell.classList.add('selected');
+        else if (isPeer(r,c)) cell.classList.add('highlight');
       }
       if (state.given[r][c]) {
         cell.classList.add('given','locked');
